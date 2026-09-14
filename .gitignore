@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+.venv/
+.env
+data/
+*.log
+.pytest_cache/
+
+# secrets — never commit
+.env
+*.env
+!*.env.example
+api_key.txt
+*.pem
+*.key
