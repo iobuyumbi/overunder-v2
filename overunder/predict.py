@@ -32,6 +32,8 @@ def build_pick(fixture, provider, odds=DEFAULT_ODDS):
     veto_reasons = [CHECK_NAMES[k] for k in VETO_KEYS if not checks.get(k, True)]
 
     passed = sum(checks.values())
+    non_veto = {k: v for k, v in checks.items() if k not in VETO_KEYS}
+    check_rate = sum(non_veto.values()) / len(non_veto) if non_veto else 0.0
     p25, lam_h, lam_a = poisson_over25(home_ms, away_ms)
 
     scoring_r = _leg_ratio(checks, SCORING_LEGS)
@@ -44,10 +46,19 @@ def build_pick(fixture, provider, odds=DEFAULT_ODDS):
     imbalance = abs(scoring_r - defence_r)
     consistency = max(0.0, leg_consistency * (1.0 - 0.5 * imbalance))
 
-    # Base = Poisson, nudge = leg-consistency. Vetoed = floor the confidence
-    # so callers can still see it but predict_day will drop via threshold + flag.
-    base = p25 if not vetoed else max(0.05, p25 * 0.35)
-    conf = min(0.98, base * (0.55 + 0.45 * consistency))
+    # Two-factor confidence blend. Poisson captures goal-scoring mechanics; check_rate captures
+    # the Symmetry rule-strength (the 16 profile checks). Equal-weighted with a
+    # super-linear boost for balanced profiles (>0.75 check-rate so a strong rule match
+    # doesn't get killed by conservative Poisson). Vetoed = floor.
+    if vetoed:
+        conf = max(0.05, p25 * 0.35)
+    else:
+        # base blend 0.45 * poisson  +  0.55 * check_rate
+        raw = 0.45 * p25 + 0.55 * check_rate
+        # super-linear boost for matches that pass almost everything
+        if check_rate >= 0.80:
+            raw = 0.40 * raw + 0.60 * consistency
+        conf = min(0.98, max(0.05, raw))
     conf = round(conf, 3)
 
     ev = round(conf * (odds - 1) - (1 - conf), 3)

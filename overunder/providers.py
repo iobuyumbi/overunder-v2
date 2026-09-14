@@ -90,14 +90,14 @@ class DemoProvider:
             rng = random.Random(key)  # stable across processes (str seed)
             atk = self.ATTACK.get(key, 1.2)
             hist = []
-            for i in range(12):
+            for i in range(24):
                 venue = "H" if i % 2 == 0 else "A"
                 lam_for = atk * (1.25 if venue == "H" else 1.0)
                 lam_agn = 1.25 if venue == "H" else 1.45
                 hist.append({"venue": venue,
                              "gf": self._pois(rng, lam_for),
                              "ga": self._pois(rng, lam_agn),
-                             "date": f"2026-08-{20 + (i % 23):02d}"})
+                             "date": f"2026-08-{(1 + (i * 3) % 27):02d}"})
             self._histories[key] = hist
         return self._histories[key]
 

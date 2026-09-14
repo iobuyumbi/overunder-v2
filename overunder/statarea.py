@@ -10,6 +10,12 @@ from datetime import date
 
 import requests
 
+try:
+    from bs4 import BeautifulSoup
+    _HAS_BS4 = True
+except ImportError:
+    _HAS_BS4 = False
+
 from .config import (CACHE_DIR, FUZZY_MIN, JINA_PROXY, ST_HOME_MIN, ST_MIN_MATCHES,
                      ST_OVER_MIN, ST_UNDER_MAX, STATAREA_URL)
 from .teams import find_match
@@ -40,6 +46,21 @@ def _dbg(msg):
 
 
 def _extract_html_text(html):
+    """BeautifulSoup DOM-aware flattener — tag-stripping regex DESTROYS table
+    row order on statarea HTML (cells collapse out of sequence). bs4's
+    get_text("\n", strip=True) preserves DOM depth order so match rows
+    arrive as TIME → votes → tip → home → − → away → stats, matching the
+    exact layout the outer tokeniser expects."""
+    if _HAS_BS4:
+        try:
+            soup = BeautifulSoup(html, "lxml")
+        except Exception:
+            soup = BeautifulSoup(html, "html.parser")
+        for tag in soup(["script", "style", "noscript", "iframe", "svg"]):
+            tag.decompose()
+        text = soup.get_text("\n", strip=True)
+        text = text.replace("\xa0", " ")
+        return text
     html = re.sub(r"<script.*?</script>|<style.*?</style>", " ", html, flags=re.S | re.I)
     html = re.sub(r'(?:alt|title)\s*=\s*"([^"]+)"', r"\n\1\n", html)
     html = re.sub(r"<[^>]+>", "\n", html)
@@ -47,7 +68,30 @@ def _extract_html_text(html):
     return html.replace("&amp;", "&")
 
 
-def parse_card(text):
+def _dump_tokens_for_debug(tokens, limit=80):
+    """Print the first N tokens to stderr so the user can paste them when
+    parse_card returns 0 matches. This lets us identify the exact token
+    order the site is currently producing without needing a network trace."""
+    if not tokens:
+        _dbg("tokens list is EMPTY — _extract_html_text produced nothing")
+        return
+    _dbg(f"first {min(limit, len(tokens))} tokens produced by extractor:")
+    for i in range(min(limit, len(tokens))):
+        t = tokens[i]
+        tag = []
+        if TIME_RE.match(t):
+            tag.append("TIME")
+        if INT_RE.match(t):
+            tag.append("INT")
+        if t.lower() in NOISE:
+            tag.append("NOISE")
+        if HT_SCORE_RE.match(t):
+            tag.append("HT")
+        suffix = f"  [{', '.join(tag)}]" if tag else ""
+        _dbg(f"  [{i:4d}] {t!r}{suffix}")
+
+
+def parse_card(text, debug_dump=False):
     if "<" in text and ">" in text:
         text = _extract_html_text(text)
     text = "\n".join(
@@ -56,6 +100,9 @@ def parse_card(text):
     )
     tokens = [t.strip() for t in text.splitlines() if t.strip()]
     matches, league, i = [], None, 0
+    times_seen = 0
+    blocks_tried = 0
+    blocks_ok = 0
     while i < len(tokens):
         t = tokens[i]
         if t.lower() in NOISE or HT_SCORE_RE.match(t):
@@ -66,11 +113,21 @@ def parse_card(text):
             league, i = t, i + 1
             continue
         if TIME_RE.match(t):
-            parsed, i = _parse_block(tokens, i, league)
+            times_seen += 1
+            blocks_tried += 1
+            parsed, next_i = _parse_block(tokens, i, league)
             if parsed:
                 matches.append(parsed)
+                blocks_ok += 1
+            i = next_i
             continue
         i += 1
+    if debug_dump or (len(matches) == 0 and len(tokens) > 0):
+        _dbg(f"parse summary: {len(tokens)} tokens, {times_seen} TIME tokens, "
+             f"{blocks_tried} blocks attempted, {blocks_ok} blocks OK, "
+             f"{len(matches)} matches")
+        if len(matches) == 0:
+            _dump_tokens_for_debug(tokens, limit=120)
     return matches
 
 
@@ -118,6 +175,7 @@ def fetch_card(day=None, retries=2):
     headers_with_auth = dict(HEADERS)
     if JINA_API_KEY:
         headers_with_auth["Authorization"] = f"Bearer {JINA_API_KEY}"
+    last_raw = None
     for attempt in range(retries + 1):
         for name, url, cache, use_auth in (
             ("jina-proxy", JINA_PROXY, f"{day}.md", True),
@@ -129,9 +187,18 @@ def fetch_card(day=None, retries=2):
                 _dbg(f"'{name}': HTTP {r.status_code}, {len(r.text)} bytes")
                 if not r.ok or len(r.text) < 20000:
                     continue
-                games = parse_card(r.text)
+                last_raw = (name, cache, r.text)
+                games = parse_card(r.text, debug_dump=True)
                 if len(games) < ST_MIN_MATCHES:
                     _dbg(f"'{name}': only {len(games)} games parsed (< {ST_MIN_MATCHES}) -- trying next")
+                    # Always save even the failing raw response so we can post-mortem
+                    diag = os.path.join(CACHE_DIR, f"FAILED_{name}_{cache}")
+                    try:
+                        with open(diag, "w", encoding="utf-8") as f:
+                            f.write(r.text)
+                        _dbg(f"'{name}': raw page saved for diagnosis -> {diag}")
+                    except OSError as e:
+                        _dbg(f"(could not save diagnostic file: {e})")
                     continue
                 path = os.path.join(CACHE_DIR, cache)
                 with open(path, "w", encoding="utf-8") as f:
@@ -141,10 +208,17 @@ def fetch_card(day=None, retries=2):
             except requests.RequestException as e:
                 _dbg(f"'{name}' failed: {e}")
         time.sleep(3 * (attempt + 1))
+    hint = ""
+    if last_raw:
+        hint = (f"\n  Last fetch was '{last_raw[0]}' ({len(last_raw[2])} bytes) — "
+                f"see FAILED_* files in {CACHE_DIR} for the raw page. "
+                f"Paste the first 40 lines of FAILED_direct_{day}.html into chat "
+                f"and I'll write the exact extractor for this layout.")
     raise RuntimeError(
         "could not fetch a usable Statarea card. If jina-proxy returned "
-        "401/402/429 it now needs a free API key; if direct returned 403 the "
-        "runner IP is blocked. Use load_card_file() with a browser-saved page.")
+        "401/402/429 it now needs a free API key (add JINA_API_KEY to .env); "
+        "if direct returned 403 the runner IP is blocked. "
+        "Use load_card_file() with a browser-saved page." + hint)
 
 
 def load_card(day=None, max_age_hours=12):

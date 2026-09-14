@@ -75,9 +75,9 @@ CHECK_NAMES = {
     "S1": f"Both teams sample >= {OVERALL_N} matches",
     "S2": f"Home BTTS rate L{OVERALL_N} >= 50%",
     "S3": f"Away BTTS rate L{OVERALL_N} >= 50%",
-    "V1": "No scoring drought (GF=0 in L2 venue)",
-    "V2": "No defensive wall (GA=0 in L2 venue)",
-    "V3": "No cold streak (tot<=2 in L2 venue)",
+    "V1": "No scoring drought (GF=0 in both L2 venue for EITHER side)",
+    "V2": "No defensive wall (GA=0 in both L2 venue for EITHER side)",
+    "V3": "No cold streak (both L2 tot<=2 BOTH sides / any L3 tot<=2)",
 }
 
 VETO_KEYS = ("V1", "V2", "V3")
@@ -140,6 +140,9 @@ def run_checks(home_ms, away_ms):
     checks["S2"] = _rate(ho, lambda m: m["gf"] > 0 and m["ga"] > 0) >= 0.5
     checks["S3"] = _rate(ao, lambda m: m["gf"] > 0 and m["ga"] > 0) >= 0.5
 
+    hv3 = _last(home_ms, 3, "H")
+    av3 = _last(away_ms, 3, "A")
+
     checks["V1"] = not (
         _all(hv2, lambda m: m["gf"] == 0) or _all(av2, lambda m: m["gf"] == 0)
     )
@@ -147,7 +150,9 @@ def run_checks(home_ms, away_ms):
         _all(hv2, lambda m: m["ga"] == 0) or _all(av2, lambda m: m["ga"] == 0)
     )
     checks["V3"] = not (
-        _all(hv2, lambda m: _tot(m) <= 2) or _all(av2, lambda m: _tot(m) <= 2)
+        (_all(hv2, lambda m: _tot(m) <= 2) and _all(av2, lambda m: _tot(m) <= 2))
+        or _all(hv3, lambda m: _tot(m) <= 2)
+        or _all(av3, lambda m: _tot(m) <= 2)
     )
 
     return checks
