@@ -10,20 +10,12 @@ from datetime import date
 
 import requests
 
-try:
-    from bs4 import BeautifulSoup
-    _HAS_BS4 = True
-except ImportError:
-    _HAS_BS4 = False
-
 from .config import (CACHE_DIR, FUZZY_MIN, JINA_PROXY, ST_HOME_MIN, ST_MIN_MATCHES,
                      ST_OVER_MIN, ST_UNDER_MAX, STATAREA_URL)
 from .teams import find_match
 
 TIME_RE = re.compile(r"^\d{2}:\d{2}$")
 INT_RE = re.compile(r"^\d+$")
-MD_LINK_RE = re.compile(r"\[([^\]]*)\]\([^ ]*\)")
-HT_SCORE_RE = re.compile(r"^HT \d{1,2}:\d{1,2}$")
 NOISE = {
     "tip", "1", "x", "2", "ht1", "htx", "ht2", "1.5", "2.5", "3.5", "bts",
     "ots", "your prediction", "advertisement", "go", "close x", "actions",
@@ -37,8 +29,8 @@ HEADERS = {
                   "(KHTML, like Gecko) Chrome/126.0 Safari/537.36",
     "Accept-Language": "en-US,en;q=0.9",
 }
-
-JINA_API_KEY = os.getenv("JINA_API_KEY", "")
+if os.getenv("JINA_API_KEY"):   # free key at jina.ai -- proxy 403s without one now
+    HEADERS["Authorization"] = "Bearer " + os.getenv("JINA_API_KEY")
 
 
 def _dbg(msg):
@@ -46,66 +38,30 @@ def _dbg(msg):
 
 
 def _extract_html_text(html):
-    """BeautifulSoup DOM-aware flattener — tag-stripping regex DESTROYS table
-    row order on statarea HTML (cells collapse out of sequence). bs4's
-    get_text("\n", strip=True) preserves DOM depth order so match rows
-    arrive as TIME → votes → tip → home → − → away → stats, matching the
-    exact layout the outer tokeniser expects."""
-    if _HAS_BS4:
-        try:
-            soup = BeautifulSoup(html, "lxml")
-        except Exception:
-            soup = BeautifulSoup(html, "html.parser")
-        for tag in soup(["script", "style", "noscript", "iframe", "svg"]):
-            tag.decompose()
-        text = soup.get_text("\n", strip=True)
-        text = text.replace("\xa0", " ")
-        return text
     html = re.sub(r"<script.*?</script>|<style.*?</style>", " ", html, flags=re.S | re.I)
     html = re.sub(r'(?:alt|title)\s*=\s*"([^"]+)"', r"\n\1\n", html)
     html = re.sub(r"<[^>]+>", "\n", html)
-    html = re.sub(r"&nbsp;?", " ", html)
-    return html.replace("&amp;", "&")
+    import html as _html
+    return _html.unescape(html)
 
 
-def _dump_tokens_for_debug(tokens, limit=80):
-    """Print the first N tokens to stderr so the user can paste them when
-    parse_card returns 0 matches. This lets us identify the exact token
-    order the site is currently producing without needing a network trace."""
-    if not tokens:
-        _dbg("tokens list is EMPTY — _extract_html_text produced nothing")
-        return
-    _dbg(f"first {min(limit, len(tokens))} tokens produced by extractor:")
-    for i in range(min(limit, len(tokens))):
-        t = tokens[i]
-        tag = []
-        if TIME_RE.match(t):
-            tag.append("TIME")
-        if INT_RE.match(t):
-            tag.append("INT")
-        if t.lower() in NOISE:
-            tag.append("NOISE")
-        if HT_SCORE_RE.match(t):
-            tag.append("HT")
-        suffix = f"  [{', '.join(tag)}]" if tag else ""
-        _dbg(f"  [{i:4d}] {t!r}{suffix}")
+MD_LINK_RE = re.compile(r"\[([^\]]*)\]\([^ ]*\)")  # URLs contain no spaces
+DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}( \d{2}:\d{2})?$")
+SCORE_RE = re.compile(r"^\d{1,2}:\d{1,2}$")
+STAT_HEADERS = {"1", "x", "2", "h1", "hx", "htx", "h2", "1.5", "2.5", "3.5",
+                "bts", "ots", "tip", "your", "prediction", "actions"}
 
 
-def parse_card(text, debug_dump=False):
+def parse_card(text):
     if "<" in text and ">" in text:
         text = _extract_html_text(text)
-    text = "\n".join(
-        MD_LINK_RE.sub(r"\1", ln).replace("**", "")
-        for ln in text.splitlines()
-    )
+    # reader-proxy returns markdown: flatten [Name](url) links and bold markers
+    text = MD_LINK_RE.sub(r"\1", text).replace("**", "")
     tokens = [t.strip() for t in text.splitlines() if t.strip()]
     matches, league, i = [], None, 0
-    times_seen = 0
-    blocks_tried = 0
-    blocks_ok = 0
     while i < len(tokens):
         t = tokens[i]
-        if t.lower() in NOISE or HT_SCORE_RE.match(t):
+        if t.lower() in NOISE:
             i += 1
             continue
         if ("-" in t and t == t.upper() and re.search(r"[A-Z]{3,}", t)
@@ -113,52 +69,55 @@ def parse_card(text, debug_dump=False):
             league, i = t, i + 1
             continue
         if TIME_RE.match(t):
-            times_seen += 1
-            blocks_tried += 1
-            parsed, next_i = _parse_block(tokens, i, league)
+            parsed, i = _parse_block(tokens, i, league)
             if parsed:
                 matches.append(parsed)
-                blocks_ok += 1
-            i = next_i
             continue
         i += 1
-    if debug_dump or (len(matches) == 0 and len(tokens) > 0):
-        _dbg(f"parse summary: {len(tokens)} tokens, {times_seen} TIME tokens, "
-             f"{blocks_tried} blocks attempted, {blocks_ok} blocks OK, "
-             f"{len(matches)} matches")
-        if len(matches) == 0:
-            _dump_tokens_for_debug(tokens, limit=120)
     return matches
 
 
 def _parse_block(tokens, i, league):
+    """Parse one match. Handles both layouts:
+    OLD (<=2026-09-12): time v1 v2 tip - HOME - AWAY s1..s11
+    NEW (>=2026-09-14): time v1 v2 TIP tip 2026-.. - HOME - AWAY <col headers> s1..s11
+    Each match may be preceded by a collapsed header block
+    (time votes 'HOME - AWAY' 'close X') which we fail past and skip."""
     n = len(tokens)
     j = i + 1
 
-    def skip_seps(idx):
-        while idx < n:
-            tok = tokens[idx]
-            if tok == "-" or tok.startswith("**") or HT_SCORE_RE.match(tok):
-                idx += 1
-            elif INT_RE.match(tok):
-                idx += 1
-            else:
-                break
-        return idx
+    def skip_junk(k):
+        while k < n and (tokens[k] == "-" or INT_RE.match(tokens[k])
+                         or DATE_RE.match(tokens[k]) or SCORE_RE.match(tokens[k])
+                         or tokens[k].startswith("**")):
+            k += 1
+        return k
 
     try:
-        while j < n and not INT_RE.match(tokens[j]):
-            j += 1
         votes1 = int(tokens[j]); j += 1
         votes2 = int(tokens[j]); j += 1
+        if tokens[j].lower() == "tip":          # NEW layout literal 'TIP' label
+            j += 1
         tip = tokens[j]; j += 1
-        j = skip_seps(j)
+        j = skip_junk(j)
         home = tokens[j]; j += 1
-        j = skip_seps(j)
+        j = skip_junk(j)
         away = tokens[j]; j += 1
-        stats = []
-        while j < n and len(stats) < 11 and INT_RE.match(tokens[j]):
-            stats.append(int(tokens[j])); j += 1
+        # collect 11 stats. Column headers '1' and '2' ARE integers -- skip
+        # them by name BEFORE the int test, else stats shift by two positions.
+        stats, scanned = [], 0
+        while j < n and len(stats) < 11 and scanned < 30:
+            t = tokens[j]
+            if TIME_RE.match(t):
+                break
+            if t.lower() in STAT_HEADERS or t == "-":
+                pass
+            elif INT_RE.match(t):
+                stats.append(int(t))
+            else:
+                break
+            j += 1
+            scanned += 1
         if len(stats) < 11:
             return None, i + 1
         return {"league": league, "time": tokens[i], "home": home, "away": away,
@@ -172,33 +131,17 @@ def _parse_block(tokens, i, league):
 def fetch_card(day=None, retries=2):
     day = day or date.today().isoformat()
     os.makedirs(CACHE_DIR, exist_ok=True)
-    headers_with_auth = dict(HEADERS)
-    if JINA_API_KEY:
-        headers_with_auth["Authorization"] = f"Bearer {JINA_API_KEY}"
-    last_raw = None
     for attempt in range(retries + 1):
-        for name, url, cache, use_auth in (
-            ("jina-proxy", JINA_PROXY, f"{day}.md", True),
-            ("direct", STATAREA_URL, f"{day}.html", False),
-        ):
+        for name, url, cache in (("jina-proxy", JINA_PROXY, f"{day}.md"),
+                                 ("direct", STATAREA_URL, f"{day}.html")):
             try:
-                hdrs = headers_with_auth if use_auth else HEADERS
-                r = requests.get(url, headers=hdrs, timeout=60)
+                r = requests.get(url, headers=HEADERS, timeout=60)
                 _dbg(f"'{name}': HTTP {r.status_code}, {len(r.text)} bytes")
                 if not r.ok or len(r.text) < 20000:
                     continue
-                last_raw = (name, cache, r.text)
-                games = parse_card(r.text, debug_dump=True)
+                games = parse_card(r.text)
                 if len(games) < ST_MIN_MATCHES:
                     _dbg(f"'{name}': only {len(games)} games parsed (< {ST_MIN_MATCHES}) -- trying next")
-                    # Always save even the failing raw response so we can post-mortem
-                    diag = os.path.join(CACHE_DIR, f"FAILED_{name}_{cache}")
-                    try:
-                        with open(diag, "w", encoding="utf-8") as f:
-                            f.write(r.text)
-                        _dbg(f"'{name}': raw page saved for diagnosis -> {diag}")
-                    except OSError as e:
-                        _dbg(f"(could not save diagnostic file: {e})")
                     continue
                 path = os.path.join(CACHE_DIR, cache)
                 with open(path, "w", encoding="utf-8") as f:
@@ -208,17 +151,10 @@ def fetch_card(day=None, retries=2):
             except requests.RequestException as e:
                 _dbg(f"'{name}' failed: {e}")
         time.sleep(3 * (attempt + 1))
-    hint = ""
-    if last_raw:
-        hint = (f"\n  Last fetch was '{last_raw[0]}' ({len(last_raw[2])} bytes) — "
-                f"see FAILED_* files in {CACHE_DIR} for the raw page. "
-                f"Paste the first 40 lines of FAILED_direct_{day}.html into chat "
-                f"and I'll write the exact extractor for this layout.")
     raise RuntimeError(
         "could not fetch a usable Statarea card. If jina-proxy returned "
-        "401/402/429 it now needs a free API key (add JINA_API_KEY to .env); "
-        "if direct returned 403 the runner IP is blocked. "
-        "Use load_card_file() with a browser-saved page." + hint)
+        "401/402/429 it now needs a free API key; if direct returned 403 the "
+        "runner IP is blocked. Use load_card_file() with a browser-saved page.")
 
 
 def load_card(day=None, max_age_hours=12):

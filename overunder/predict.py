@@ -1,104 +1,84 @@
-"""Build Over 2.5 picks from fixtures + team histories.
+"""Build picks for any supported market from fixtures + team histories.
 
-Symmetry-aware filtering:
-  1. VETOES (hard blocks V1/V2/V3) — drop pick outright, no exceptions
-  2. FOUR-LEG CONSISTENCY — scoring legs (H,A) AND opponent-concession legs
-     (D,E) must both show strength. A Poisson hot lambda with cold defence
-     legs is a false positive ('streak meets wall' loss).
-  3. Blended confidence — Poisson base, weighted by leg-consistency ratio,
-     not just raw check count.
-"""
+Markets: 'over' (Over 2.5), 'btts' (both teams to score), 'home' (home win).
+One engine, one report, one settlement path -- not three separate scripts."""
 
 from .config import (DEFAULT_ODDS, KELLY_FRACTION, MAX_STAKE_PCT, O25_MIN_CONFIDENCE,
                      PREMIUM_TIER)
-from .rules import (CHECK_NAMES, VETO_KEYS, any_veto_failed, poisson_over25,
-                    run_checks, xg_forecast)
+from .rules import CHECK_NAMES, lambdas, market_probs, xg_forecast
 
-SCORING_LEGS = ("H1", "H2", "H3", "H4", "A1", "A2", "A3", "A4")
-DEFENCE_LEGS = ("D1", "D2", "D3", "D4", "E1", "E2", "E3", "E4")
-FORM_GATES   = ("S1", "S2", "S3")
+MARKET_LABEL = {"over": "Over 2.5", "btts": "BTTS", "home": "Home win",
+                "home_sc": "Home team to score", "away_sc": "Away team to score"}
+
+# which of the 13 checks count as 'core' per market (for the missed-list flavor)
+CORE_CHECKS = {
+    "over":    ["H1", "H2", "H3", "A1", "A2", "A3", "A4", "A5"],
+    "btts":    ["H4", "H5", "H6", "A3", "A6", "A7", "A8"],
+    "home":    ["H1", "H3", "H6", "H7", "S6", "S7", "A5"],
+    "home_sc": ["H1", "H6", "H7", "S6"],
+    "away_sc": ["A1", "A3", "A8", "S6"],
+}
 
 
-def _leg_ratio(checks, keys):
-    vals = [checks[k] for k in keys if k in checks]
-    return sum(vals) / len(vals) if vals else 0.0
-
-
-def build_pick(fixture, provider, odds=DEFAULT_ODDS):
-    home_ms = provider.team_matches(fixture["home"])
-    away_ms = provider.team_matches(fixture["away"])
+def build_pick(fixture, provider, market="over", odds=DEFAULT_ODDS, before=None):
+    # `before` = ISO date; only matches strictly before it count toward form.
+    # Defaults to the fixture's own day so nothing from match day leaks in.
+    before = before if before is not None else fixture.get("date")
+    home_ms = provider.team_matches(fixture["home"], before=before)
+    away_ms = provider.team_matches(fixture["away"], before=before)
+    from .rules import run_checks
     checks = run_checks(home_ms, away_ms)
-    vetoed = any_veto_failed(checks)
-    veto_reasons = [CHECK_NAMES[k] for k in VETO_KEYS if not checks.get(k, True)]
-
     passed = sum(checks.values())
-    non_veto = {k: v for k, v in checks.items() if k not in VETO_KEYS}
-    check_rate = sum(non_veto.values()) / len(non_veto) if non_veto else 0.0
-    p25, lam_h, lam_a = poisson_over25(home_ms, away_ms)
+    probs = market_probs(home_ms, away_ms)
+    p = probs[market]
+    lam_h, lam_a = lambdas(home_ms, away_ms)
 
-    scoring_r = _leg_ratio(checks, SCORING_LEGS)
-    defence_r = _leg_ratio(checks, DEFENCE_LEGS)
-    form_r    = _leg_ratio(checks, FORM_GATES)
-    leg_consistency = (0.40 * scoring_r + 0.40 * defence_r + 0.20 * form_r)
+    def gpg(ms, venue=None):
+        sel = [m for m in ms if venue is None or m["venue"] == venue]
+        return round(sum(m["gf"] for m in sel) / len(sel), 2) if sel else 0.0
 
-    # Penalise imbalance: e.g. scoring=1.0 defence=0.2 -> mean 0.6 -> penalty
-    # pushes it low, so a one-sided profile never looks confident.
-    imbalance = abs(scoring_r - defence_r)
-    consistency = max(0.0, leg_consistency * (1.0 - 0.5 * imbalance))
-
-    # Two-factor confidence blend. Poisson captures goal-scoring mechanics; check_rate captures
-    # the Symmetry rule-strength (the 16 profile checks). Equal-weighted with a
-    # super-linear boost for balanced profiles (>0.75 check-rate so a strong rule match
-    # doesn't get killed by conservative Poisson). Vetoed = floor.
-    if vetoed:
-        conf = max(0.05, p25 * 0.35)
-    else:
-        # base blend 0.45 * poisson  +  0.55 * check_rate
-        raw = 0.45 * p25 + 0.55 * check_rate
-        # super-linear boost for matches that pass almost everything
-        if check_rate >= 0.80:
-            raw = 0.40 * raw + 0.60 * consistency
-        conf = min(0.98, max(0.05, raw))
+    conf = min(0.98, p * (0.70 + 0.30 * passed / len(checks)))
     conf = round(conf, 3)
-
     ev = round(conf * (odds - 1) - (1 - conf), 3)
-    stake = 0.0 if (ev <= 0 or vetoed) else round(min(MAX_STAKE_PCT, ev * KELLY_FRACTION), 1)
-    tier = "🔥 Premium" if (conf >= PREMIUM_TIER and not vetoed) else "✅ Solid"
+    stake = 0.0 if ev <= 0 else round(min(MAX_STAKE_PCT, ev * KELLY_FRACTION), 1)
+    tier = "🔥 Premium" if conf >= PREMIUM_TIER else "✅ Solid"
     lo, hi = xg_forecast(lam_h, lam_a)
-    missed = [f"{CHECK_NAMES[k]} (failed)" for k, v in checks.items() if not v]
 
-    leg_breakdown = {
-        "scoring": round(scoring_r, 2),
-        "defence": round(defence_r, 2),
-        "form":    round(form_r, 2),
-        "imbalance": round(imbalance, 2),
-    }
+    core = CORE_CHECKS.get(market, [])
+    missed = [f"{CHECK_NAMES[k]} (failed)" for k in core if not checks[k]]
 
     return {
         "date": fixture["date"], "league": fixture["league"],
         "home": fixture["home"], "away": fixture["away"],
-        "market": "over", "line": 2.5,
-        "confidence": conf, "model_p": round(p25, 3),
+        "market": market, "label": MARKET_LABEL[market],
+        "line": 2.5 if market == "over" else None,
+        "confidence": conf, "model_p": round(p, 3),
         "checks_passed": passed, "checks_total": len(checks),
         "missed": missed, "ev": ev, "edge_pct": round(ev * 100, 1),
         "stake_pct": stake, "odds": odds, "tier": tier,
         "xg": [lo, hi],
-        "vetoed": vetoed,
-        "veto_reasons": veto_reasons,
-        "legs": leg_breakdown,
+        "home_attack": gpg(home_ms, "H"), "home_concede": None,
+        "away_attack": gpg(away_ms, "A"),
+        "home_gpg_all": gpg(home_ms), "away_gpg_all": gpg(away_ms),
     }
 
 
-def predict_day(provider, day=None, odds=DEFAULT_ODDS, min_conf=O25_MIN_CONFIDENCE):
+def predict_day(provider, day=None, markets=("over",), odds=DEFAULT_ODDS,
+                min_conf=O25_MIN_CONFIDENCE):
     picks = []
     for fx in provider.fixtures(day):
-        p = build_pick(fx, provider, odds=odds)
-        if p["vetoed"]:
-            continue
-        if p["confidence"] < min_conf:
-            continue
-        picks.append(p)
-    picks.sort(key=lambda p: -p["confidence"])
-    for i, p in enumerate(picks, 1):
-        p["num"] = i
+        for mkt in markets:
+            try:
+                p = build_pick(fx, provider, market=mkt, odds=odds)
+            except Exception:
+                continue
+            if p["confidence"] >= min_conf:
+                picks.append(p)
+    # number within each market, ordered by confidence
+    for mkt in markets:
+        group = sorted([p for p in picks if p["market"] == mkt],
+                       key=lambda p: -p["confidence"])
+        for i, p in enumerate(group, 1):
+            p["num"] = i
+    picks.sort(key=lambda p: (list(markets).index(p["market"]), -p["confidence"]))
     return picks

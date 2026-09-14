@@ -27,16 +27,43 @@ from . import statarea as st
 def _provider(use_demo):
     if use_demo:
         return DemoProvider()
+    return SoccerbaseProvider()
+
+
+def _date_range(args):
+    from datetime import date, timedelta
+    start = args.date or date.today().isoformat()
+    n = getattr(args, "days", 1) or 1
+    return [(date.fromisoformat(start) + timedelta(days=i)).isoformat()
+            for i in range(n)]
+
+
+def _markets(arg):
+    return tuple(m.strip() for m in (arg or "over").split(",") if m.strip())
+
+
+def _maybe_tag_statarea(picks, args):
+    """Tag picks with statarea consensus if a card is available; otherwise
+    warn once and continue untagged -- predictions never block on statarea."""
+    if not getattr(args, "statarea", False):
+        return picks
     try:
-        return SoccerbaseProvider()
+        text = st.load_card_file(args.card) if getattr(args, "card", None) else st.load_card(args.date)
+        games = st.parse_card(text)
+        if len(games) < st.ST_MIN_MATCHES:
+            print(f"[statarea] only {len(games)} games parsed -- skipping tags",
+                  file=sys.stderr)
+            return picks
+        return st.cross_check(picks, games)
     except Exception as e:
-        sys.exit(f"real provider unavailable ({e}). Use --demo or implement "
-                 f"SoccerbaseProvider parsing.")
+        print(f"[statarea] unavailable ({e}) -- continuing without tags",
+              file=sys.stderr)
+        return picks
 
 
 def cmd_demo(args):
     prov = DemoProvider()
-    picks = predict_day(prov, day=args.date)
+    picks = predict_day(prov, day=args.date, markets=_markets(args.markets))
     sample_card = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                "sample_data", "sample_card_2026-09-12.md")
     games = st.parse_card(open(sample_card, encoding="utf-8").read())
@@ -56,10 +83,23 @@ def cmd_demo(args):
 
 def cmd_predict(args):
     prov = _provider(args.demo)
-    picks = predict_day(prov, day=args.date, odds=args.odds)
-    if args.statarea or args.demo:
-        text = st.load_card(args.date) if not args.card else st.load_card_file(args.card)
-        picks = st.cross_check(picks, st.parse_card(text))
+    mkts = _markets(args.markets)
+    picks = []
+    for d in _date_range(args):
+        try:
+            fxs = prov.fixtures(d)
+            print(f"predicting {len(fxs)} fixtures x {len(mkts)} markets for {d}...",
+                  file=sys.stderr, flush=True)
+            picks += predict_day(prov, day=d, odds=args.odds, markets=mkts)
+        except RuntimeError as e:
+            print(f"PREDICT FAILED for {d}: {e}", file=sys.stderr)
+            if getattr(args, "days", 1) == 1:
+                sys.exit(f"Diagnose with:  python -m overunder scrape-check --date {d}\n"
+                         f"Or offline demo:  python -m overunder predict --demo")
+    # statarea cards only exist for ~today: tag just those, skip future days
+    today_picks = [p for p in picks if p.get("date") == __import__("datetime").date.today().isoformat()]
+    other_picks = [p for p in picks if p not in today_picks]
+    picks = _maybe_tag_statarea(today_picks, args) + other_picks
     added = hist.record_picks(picks)
     print(json.dumps(picks, indent=2))
     print(f"recorded {added} new picks -> {config.HISTORY_FILE}", file=sys.stderr)
@@ -102,17 +142,245 @@ def cmd_compare(args):
 
 def cmd_settle(args):
     prov = DemoProvider() if args.demo else _provider(False)
-    n = hist.settle(prov.results(args.date))
-    print(f"settled {n} picks")
+    if args.date:
+        n = hist.settle(prov.results(args.date))
+        print(f"settled {n} picks for {args.date}")
+        return
+    # auto: fetch each pending pick's own day page (cached) and settle what matches
+    h = hist._load()
+    dates = sorted({r["date"] for r in h["pending"]})
+    if not dates:
+        print("nothing pending")
+        return
+    total = 0
+    for d in dates:
+        try:
+            rows = prov.results(d)
+        except RuntimeError as e:
+            print(f"{d}: cannot fetch results ({e})", file=sys.stderr)
+            continue
+        n = hist.settle(rows)
+        total += n
+        print(f"  {d}: settled {n}")
+    print(f"settled {total} picks across {len(dates)} day(s)")
+
+
+def _fmt_group(name, g):
+    return (f"  {name:<14} {g['n']:>3} picks  {g['w']}W-{g['l']}L  "
+            f"{g['win_pct']:>5}%  profit {g['profit']:+.2f}")
 
 
 def cmd_stats(args):
-    print(json.dumps(hist.stats(), indent=2))
+    s = hist.stats()
+    if getattr(args, "json", False):
+        print(json.dumps(s, indent=2))
+        return
+    print("== PREDICTION STATS ==")
+    for name, g in s.get("overall", {}).items():
+        print("OVERALL      " + _fmt_group(name, g)[2:])
+    print("BY STATAREA SIGNAL:")
+    for name, g in sorted(s.get("by_signal", {}).items()):
+        print(_fmt_group(name, g))
+    print("BY TIER:")
+    for name, g in sorted(s.get("by_tier", {}).items()):
+        print(_fmt_group(name, g))
+    print(f"pending: {s['pending']}   settled: {s['settled_total']}")
+
+
+def cmd_backtest(args):
+    """Replay past days: generate the picks the model WOULD have made using
+    only data available before each match day (no lookahead), settle against
+    the actual results, and report hypothetical performance per market.
+
+    Run `backfill --days N` first so the day pages are cached; backtest then
+    costs no extra network."""
+    from datetime import date, timedelta
+    from .providers import SoccerbaseProvider, load_history_db
+    from .predict import build_pick
+    from .history import _settle_one
+    from .config import O25_MIN_CONFIDENCE
+    prov = SoccerbaseProvider()
+    mkts = _markets(args.markets)
+    min_conf = args.min_conf
+    if not load_history_db():
+        print("WARNING: history_db.json is empty -- run 'backfill --days N' first "
+              "for meaningful form data.", file=sys.stderr)
+    agg = {m: {"n": 0, "w": 0, "l": 0, "profit": 0.0} for m in mkts}
+    alln = 0
+    days_used = 0
+    for i in range(args.days, 0, -1):
+        d = (date.today() - timedelta(days=i)).isoformat()
+        try:
+            rows = prov.day_rows(d)
+        except RuntimeError:
+            continue
+        played = [r for r in rows if r["hg"] is not None]
+        if not played:
+            continue
+        days_used += 1
+        day_n = 0
+        for r in played:
+            fx = {"date": d, "league": r["league"],
+                  "home": r["home"], "away": r["away"]}
+            for mkt in mkts:
+                p = build_pick(fx, prov, market=mkt, odds=args.odds, before=d)
+                if p["confidence"] < min_conf:
+                    continue
+                res = _settle_one(p, r["hg"], r["ag"])
+                g = agg[mkt]
+                g["n"] += 1
+                if res == "W":
+                    g["w"] += 1
+                    g["profit"] += p["stake_pct"] * (args.odds - 1)
+                elif res == "L":
+                    g["l"] += 1
+                    g["profit"] -= p["stake_pct"]
+                day_n += 1
+                alln += 1
+        print(f"  {d}: {len(played)} matches, {day_n} picks", file=sys.stderr)
+    print("\n== BACKTEST (hypothetical, no-lookahead) ==")
+    tw = tl = 0
+    for m in mkts:
+        g = agg[m]
+        tw += g["w"]; tl += g["l"]
+        wp = round(100 * g["w"] / g["n"], 1) if g["n"] else 0.0
+        print(f"  {m:<10} {g['n']:>3} picks  {g['w']}W-{g['l']}L  {wp:>5}%  "
+              f"profit {g['profit']:+.2f} units")
+    wp = round(100 * tw / alln, 1) if alln else 0.0
+    print(f"  {'TOTAL':<10} {alln:>3} picks  {tw}W-{tl}L  {wp:>5}%")
+    print(f"({days_used} match days replayed, min_confidence {min_conf}, "
+          f"odds {args.odds})")
+
+
+def cmd_backfill(args):
+    """Scrape results.sd for each of the last N days into the local history DB.
+    One request per day with a polite delay; resumable (cached pages reused,
+    already-stored matches deduped)."""
+    import time as _time
+    from datetime import date, timedelta
+    from .providers import (SoccerbaseProvider, db_add_match, load_history_db,
+                            save_history_db)
+    prov = SoccerbaseProvider()
+    db = load_history_db()
+    added, days_ok = 0, 0
+    for i in range(args.days):
+        d = (date.today() - timedelta(days=i)).isoformat()
+        try:
+            rows = prov.results(d)
+        except RuntimeError as e:
+            print(f"{d}: fetch failed ({e})", file=sys.stderr)
+            continue
+        days_ok += 1
+        for r in rows:
+            added += db_add_match(db, r["home"], "H", r["hg"], r["ag"], d)
+            added += db_add_match(db, r["away"], "A", r["ag"], r["hg"], d)
+        if rows:
+            print(f"{d}: {len(rows)} results", file=sys.stderr)
+        if i % 10 == 9:
+            save_history_db(db)
+        _time.sleep(args.sleep)
+    save_history_db(db)
+    print(f"backfill done: {added} team-matches from {days_ok} days "
+          f"({len(db)} teams in DB at {os.path.abspath(__import__('overunder.providers', fromlist=['HISTORY_DB']).HISTORY_DB)})")
+
+
+def cmd_verify(args):
+    """Audit data correctness: settled scores vs fresh scrape, parser sanity.
+    Run after settle to confirm you are not losing to data errors."""
+    from datetime import date
+    from .teams import find_match
+    h = hist._load()
+    prov = SoccerbaseProvider()
+    checked = missing = mismatched = 0
+    for rec in h["settled"][-args.n:]:
+        try:
+            rows = prov.results(rec["date"])
+        except RuntimeError:
+            continue
+        g, _ = find_match(rec["home"], rec["away"], rows)
+        if not g:
+            missing += 1
+            print(f"  MISSING in scrape: {rec['home']} vs {rec['away']} ({rec['date']})")
+            continue
+        checked += 1
+        if rec.get("score") and rec["score"] != f"{g['hg']}-{g['ag']}":
+            mismatched += 1
+            print(f"  MISMATCH {rec['home']} vs {rec['away']}: history {rec['score']} "
+                  f"vs scrape {g['hg']}-{g['ag']}")
+    day = date.today().isoformat()
+    try:
+        html = prov._get(f"{prov.BASE}/matches/results.sd?date={day}",
+                         f"sb_date_{day}.html")
+        rows = prov._parse_rows(html)
+        noleague = sum(1 for r in rows if not r["league"])
+        weird = [r for r in rows if r["hg"] is not None
+                 and (r["hg"] > 12 or r["ag"] > 12)]
+        print(f"parser sanity {day}: {len(rows)} rows, {noleague} without league, "
+              f"{len(weird)} implausible scores")
+    except RuntimeError as e:
+        print(f"parser sanity: unchecked ({e})")
+    print(f"verify: {checked} settled picks re-checked, {mismatched} mismatches, "
+          f"{missing} missing from scrape")
+
+
+def cmd_scrape_check(args):
+    """Verify the soccerbase scraper from your machine before trusting it."""
+    prov = SoccerbaseProvider()
+    if getattr(args, "team", None):
+        rows, snippets = prov.debug_team(args.team)
+        scored = [r for r in rows if r["hg"] is not None]
+        print(f"team '{args.team}': {len(scored)} scored / {len(rows)} total rows")
+        for r in rows[:8]:
+            score = f"{r['hg']}-{r['ag']}" if r["hg"] is not None else "v"
+            print(f"  {r['date']}  {r['league'][:26]:<26} {r['home']} {score} {r['away']}")
+        if not scored:
+            print("\nDEBUG: no scores matched. Score-like text found on page:")
+            for s in snippets:
+                print("  ..." + s + "...")
+            print("\nPaste the lines above to get the exact parser fix.")
+        return
+    day = args.date or __import__("time").strftime("%Y-%m-%d")
+    print(f"checking soccerbase for {day} ...", file=sys.stderr)
+    rows = prov._parse_rows(prov._get(f"{prov.BASE}/matches/results.sd?date={day}",
+                                      f"sb_date_{day}.html"))
+    played = [r for r in rows if r["hg"] is not None]
+    fx = [r for r in rows if r["hg"] is None]
+    print(f"parsed {len(rows)} rows: {len(played)} results, {len(fx)} fixtures")
+    if rows and not played:
+        import re as _re
+        html = prov._get(f"{prov.BASE}/matches/results.sd?date={day}",
+                         f"sb_date_{day}.html").replace("&nbsp;", " ")
+        hits = []
+        for m in prov.RE_SCORE_LOOSE.finditer(html):
+            s = max(0, m.start() - 40)
+            hits.append(html[s:m.end() + 25].replace("\n", " "))
+            if len(hits) >= 5:
+                break
+        print("DEBUG: rows exist but no scores parsed. Score-like text on page:")
+        for h in hits:
+            print("  ..." + h + "...")
+    for r in rows[:12]:
+        score = f"{r['hg']}-{r['ag']}" if r["hg"] is not None else "v"
+        print(f"  {r['date']}  {r['league'][:28]:<28} {r['home']} {score} {r['away']}")
+    if not rows:
+        print("ZERO rows -- markup changed or blocked; inspect the saved page in "
+              "your cache dir and adjust RE_* patterns in providers.py", file=sys.stderr)
 
 
 def cmd_report(args):
     prov = DemoProvider() if args.demo else _provider(args.demo)
-    picks = predict_day(prov, day=args.date)
+    mkts = _markets(args.markets)
+    picks = []
+    for d in _date_range(args):
+        try:
+            picks += predict_day(prov, day=d, markets=mkts)
+        except RuntimeError as e:
+            print(f"report: no fixtures for {d} ({e})", file=sys.stderr)
+    # renumber per market across the whole window (dates stay on each pick block)
+    for mkt in mkts:
+        group = [p for p in picks if p["market"] == mkt]
+        for i, p in enumerate(group, 1):
+            p["num"] = i
     if args.demo:
         sample_card = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                    "sample_data", "sample_card_2026-09-12.md")
@@ -138,15 +406,36 @@ def main(argv=None):
         p.add_argument("--demo", action="store_true")
         p.add_argument("--telegram", action="store_true")
 
-    p = sub.add_parser("demo"); common(p); p.add_argument("--out"); p.set_defaults(fn=cmd_demo)
+    p = sub.add_parser("demo"); common(p); p.add_argument("--out")
+    p.add_argument("--markets", default="over,btts,home")
+    p.set_defaults(fn=cmd_demo)
     p = sub.add_parser("predict"); common(p); p.add_argument("--odds", type=float, default=config.DEFAULT_ODDS)
     p.add_argument("--statarea", action="store_true"); p.add_argument("--card")
+    p.add_argument("--markets", default="over", help="comma list: over,btts,home,home_sc,away_sc")
+    p.add_argument("--days", type=int, default=1, help="predict N days from --date (default today)")
     p.set_defaults(fn=cmd_predict)
     p = sub.add_parser("compare"); common(p); p.add_argument("--picks", required=True)
     p.add_argument("--card"); p.set_defaults(fn=cmd_compare)
-    p = sub.add_parser("settle"); common(p); p.set_defaults(fn=cmd_settle)
-    p = sub.add_parser("stats"); p.set_defaults(fn=cmd_stats)
-    p = sub.add_parser("report"); common(p); p.set_defaults(fn=cmd_report)
+    p = sub.add_parser("settle"); common(p); p.add_argument("--days", type=int, default=None)
+    p.set_defaults(fn=cmd_settle)
+    p = sub.add_parser("stats"); p.add_argument("--json", action="store_true")
+    p.set_defaults(fn=cmd_stats)
+    p = sub.add_parser("report"); common(p); p.add_argument("--markets", default="over,btts,home")
+    p.add_argument("--days", type=int, default=1)
+    p.set_defaults(fn=cmd_report)
+    p = sub.add_parser("scrape-check"); p.add_argument("--date", default=None)
+    p.add_argument("--team", default=None, help="debug one team's page parse")
+    p.set_defaults(fn=cmd_scrape_check)
+    p = sub.add_parser("backfill"); p.add_argument("--days", type=int, default=120)
+    p.add_argument("--sleep", type=float, default=1.0, help="seconds between day fetches")
+    p.set_defaults(fn=cmd_backfill)
+    p = sub.add_parser("verify"); p.add_argument("--n", type=int, default=50)
+    p.set_defaults(fn=cmd_verify)
+    p = sub.add_parser("backtest"); p.add_argument("--days", type=int, default=30)
+    p.add_argument("--markets", default="over")
+    p.add_argument("--odds", type=float, default=config.DEFAULT_ODDS)
+    p.add_argument("--min-conf", type=float, default=config.O25_MIN_CONFIDENCE)
+    p.set_defaults(fn=cmd_backtest)
     p = sub.add_parser("fetch-statarea"); p.add_argument("--date", default=None)
     p.set_defaults(fn=cmd_fetch_statarea)
 

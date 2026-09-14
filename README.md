@@ -1,81 +1,88 @@
 # overunder-v2
 
-Over/Under 2.5 prediction system rebuilt from scratch, with a Statarea consensus
-cross-check and a full bet-settlement / ROI-tracking loop.
+Over/Under 2.5, BTTS, home-win and team-to-score prediction system with a
+Statarea consensus cross-check, soccerbase scraping, result settlement,
+ROI tracking, and no-lookahead backtesting.
 
-## Why v2
-
-The original repo drifted beyond repair. This is a clean, small, testable core
-that keeps the proven ideas and drops the 15k lines of accreted code:
-
-- **over25tips.com ruleset** (H1/H2/A1-A4) — the exact public rule text, plus
-  7 supporting checks, rendered as `Profile: N/13 checks passed`
-- **Poisson goals model** for a defensible base probability
-- **EV + fractional-Kelly staking** (matches your old stake curve)
-- **Statarea cross-check** — verified parser, name aliasing, AGREE/DIVERGE tags
-- **Settlement + ROI per signal** so the 70/40/55 thresholds prove themselves
-- **VIP-style report** identical in shape to your channel format
-- **Offline demo** — the whole cycle runs with zero network
+Successor to iobuyumbi/over-under, rebuilt from scratch: one tested engine
+(~2,000 lines, 27 unit tests) instead of 15k lines of drifted code.
 
 ## Install
 
-```bash
-unzip overunder-v2.zip && cd overunder-v2
-python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-```
+    unzip overunder-v2.zip && cd overunder-v2
+    python -m venv .venv && .venv\Scripts\activate      (Windows)
+    pip install -r requirements.txt
 
-## Prove it works (offline)
+## Prove it works (offline, no network)
 
-```bash
-python -m overunder demo          # predict -> cross-check -> report -> settle -> stats
-python -m unittest discover -s tests -v
-```
+    python -m overunder demo
+    python -m unittest discover -s tests -v              (expect 27+ pass)
+
+## First live setup (one time)
+
+    python -m overunder scrape-check --date 2026-09-14   (confirm soccerbase parse works)
+    python -m overunder backfill --days 120              (history DB for deep form + backtests)
 
 ## Daily workflow
 
-```bash
-python -m overunder fetch-statarea          # cache today's card (needs network)
-python -m overunder predict --statarea      # your picks + statarea tags, recorded to history
-python -m overunder report                  # VIP-style report (add --telegram to send)
-python -m overunder settle                  # after results are known
-python -m overunder stats                   # ROI overall / by statarea signal / by tier
-```
+    python -m overunder fetch-statarea                   (optional; tags only, never blocks)
+    python -m overunder predict --statarea --markets over,btts,home,home_sc,away_sc
+    python -m overunder report                           (VIP-style txt; add --telegram to send)
+    python -m overunder settle                           (auto-scans every pending pick's date)
+    python -m overunder verify                           (audits recorded scores vs scrape)
+    python -m overunder stats                            (ROI by market / tier / statarea signal)
 
-## Wiring real data
+Or just:  run_local.bat   (Windows, does all of the above; `run_local.bat demo` offline)
 
-`overunder/providers.py` has the interface. `DemoProvider` runs offline;
-`SoccerbaseProvider` has production fetch plumbing (retry/backoff/cache) with
-the page-specific parsing marked `NotImplementedError` — implement
-`_parse_fixtures` / `_parse_results` / team pages against live soccerbase
-markup, or adapt your old scraper into the same three methods. Nothing else
-in the codebase changes.
+## Multi-day and backtesting
 
-## Running locally
+    python -m overunder predict --days 4                 (today + 3 days ahead, all recorded)
+    python -m overunder report --days 4
+    python -m overunder backtest --days 60 --markets over,btts,home
+        (replays the past N days: picks as-of each morning, settled vs real
+         results, no lookahead; never writes to prediction history)
 
-See `SCHEDULE.local.md` — `run_local.bat` (Windows) and `run_daily.sh` (Linux/mac) run the whole pipeline, and your home IP avoids the datacenter blocks that break `fetch-statarea` on GitHub Actions.
+## Commands reference
 
-## Config
+    demo            offline end-to-end self-test
+    predict         build picks for a day/range of days (--date, --days, --markets,
+                    --odds, --statarea, --card, --demo)
+    report          VIP-style txt report (--days, --markets, --telegram)
+    settle          settle pending picks (no args = scan all pending dates)
+    stats           readable ROI tables (--json for machines)
+    fetch-statarea  cache today's statarea card (best-effort)
+    compare         cross-check an external picks file vs the statarea card
+    scrape-check    verify soccerbase scraping (--date, or --team to debug one team)
+    backfill        scrape N days of results into data\history_db.json
+    backtest        no-lookahead historical replay + hypothetical results
+    verify          audit settled picks vs fresh scrape; parser sanity report
 
-Everything lives in `overunder/config.py` and can be overridden by env vars
-(copy `.env.example`). Key knobs: `ST_OVER_MIN` (70), `ST_UNDER_MAX` (40),
-`ST_HOME_MIN` (55), `O25_MIN_CONFIDENCE`, `DEFAULT_ODDS`, `KELLY_FRACTION`.
+## Data sources & honesty notes
 
-## Push to your new repo
+- soccerbase.com `results.sd?date=` serves both fixtures and results for a
+  day; team pages (`team_id`) give recent form; team IDs are cached in
+  ~/.cache/overunder/team_ids.json.
+- Statarea tags are AGREE/DIVERGE/NOT_FOUND at 70/40/55 thresholds
+  (env: ST_OVER_MIN, ST_UNDER_MAX, ST_HOME_MIN). They are advisory until
+  `stats` proves their value on settled picks.
+- Backtests are honest (point-in-time `before` filtering, enforced in code
+  and covered by a regression test) but assume flat odds -- stress with
+  --odds 1.9.
+- Postponed matches may show as MISSING in verify; that is flagged, never
+  silently wrong.
+- Never delete prediction_history.json mid-run; if a clean slate is needed,
+  rename it (corrupt/empty files are auto-quarantined, not fatal).
 
-```bash
-git init
-git add .
-git commit -m "overunder v2: clean core + statarea cross-check"
-git remote add origin git@github.com:iobuyumbi/overunder-v2.git
-git push -u origin main
-```
+## Layout
 
-## Honest limitations
+    overunder/            the package (cli, rules, predict, providers,
+                          statarea, history, report, notify, config, teams)
+    tests/                unittest suite (27+ tests)
+    sample_data/          bundled statarea card + demo fixtures/results
+    data/                 YOUR data: prediction_history.json, history_db.json
+                          (gitignored; back it up yourself)
 
-- Statarea scraping is inherently brittle; the 30-game validation gate and
-  raw dumps tell you the day it breaks instead of silently misfiltering.
-- The real soccerbase adapter is a skeleton until implemented against live
-  markup.
-- Thresholds are starting values. `stats` after ~100 settled picks is the
-  arbiter — promote `AGREE_*` to a hard gate only if the data says so.
+## License / usage
+
+Personal use. Betting involves risk; the backtest exists so you can measure
+the model before staking real money.

@@ -1,86 +1,39 @@
-"""Unified prediction rules — Symmetry Principle.
+"""The over25tips.com public ruleset (H1/H2/A1-A4) extended: EVERY form signal
+has a venue-specific AND an overall variant, so all markets judge both.
 
-Core thesis (every market = scoring forces + conceding forces):
-  Over 2.5 needs ALL FOUR of:
-    Home scores at home    (H checks)
-    Away concedes on road  (D checks — away DEFENCE is LEAKY)
-    Away scores on road    (A checks)
-    Home concedes at home  (E checks — home DEFENCE is EXPOSED)
-
-If any leg fails, the "scoring streak meets a defensive wall" pattern
-produces a false positive. Check windows match the profile we settled on:
-  Venue-specific = last 5    (reduced from 6; tighter signal)
-  Overall form   = last 10   (maintained; broader context)
-  Veto window    = last 2-3  (hot/cold streaks)
-
-Check list (20 total — 4 scoring legs × venue/overall + form gates + vetoes):
-
-  SCORING SIDE (classic over25tips profile — venue L5 / overall L10)
-    H1  Home GF in L5 home            >= 10
-    H2  Home L5 home: 3+ games over 2.5
-    H3  Home GF rate (L10 overall)    >= 1.5/match
-    H4  Home: 5+ of L10 over 2.5
-
-    A1  Away GF in L5 away            >= 8
-    A2  Away L5 away: 3+ games over 2.5
-    A3  Away GF rate (L10 overall)    >= 1.3/match
-    A4  Away: 5+ of L10 over 2.5
-
-  SYMMETRY / OPPONENT-CONCESSION SIDE (Defence Gate — leaky mode)
-  These are the checks that prevent 'scoring streak vs defensive wall' losses.
-    D1  Away GA in L5 away             >= 10   (away leaks on road)
-    D2  Away L5 away: 3+ games BTTS-yes
-    D3  Away GA rate (L10 overall)     >= 1.5/match
-    D4  Away: conceded in 8+ of L10
-
-    E1  Home GA in L5 home             >= 8    (home leaks at venue)
-    E2  Home L5 home: 3+ games BTTS-yes
-    E3  Home GA rate (L10 overall)     >= 1.3/match
-    E4  Home: conceded in 8+ of L10
-
-  FORM / ACTIVITY GATES
-    S1  Both teams have >= 10 matches in sample  (data reliability)
-    S2  BTTS rate L10 >= 50% for home
-    S3  BTTS rate L10 >= 50% for away
-
-  VETOES (hard blocks — ANY failing removes pick from contention)
-    V1  Scoring drought: either team GF=0 in both L2 venue
-    V2  Defensive wall:  either team GA=0 in both L2 venue
-    V3  Cold streak:     either team total<=2 in both L2 venue
+17 checks:
+  H1 home goals L3 home (7+, rate-fallback early season)      A1 away goals L3 away (7+, fallback)
+  H2 home over2.5 L3 home                                     A2 away prev match 2+ goals
+  H3 home over2.5 L6 overall                                  A3 away scored L3 away
+  H4 home BTTS L6 home                                        A4 away over2.5 L3 away
+  H5 home BTTS L6 overall                                     A5 away over2.5 L6 overall
+  H6 home scored L3 home                                      A6 away BTTS L6 away
+  H7 home scored L6 overall                                   A7 away BTTS L6 overall
+                                                              A8 away scored L6 overall
+  S6 both teams active (4+ matches)   S7 goals trend rising
 """
 
 import math
 
-VENUE_N = 5
-OVERALL_N = 10
-VETO_N = 2
-
 CHECK_NAMES = {
-    "H1": f"Home goals L{VENUE_N} home (>=10)",
-    "H2": f"Home over 2.5 L{VENUE_N} home (3+)",
-    "H3": f"Home GF rate L{OVERALL_N} overall (>=1.5)",
-    "H4": f"Home over 2.5 L{OVERALL_N} overall (5+)",
-    "A1": f"Away goals L{VENUE_N} away (>=8)",
-    "A2": f"Away over 2.5 L{VENUE_N} away (3+)",
-    "A3": f"Away GF rate L{OVERALL_N} overall (>=1.3)",
-    "A4": f"Away over 2.5 L{OVERALL_N} overall (5+)",
-    "D1": f"Away conceded L{VENUE_N} away — leaky (>=10)",
-    "D2": f"Away BTTS-yes L{VENUE_N} away (3+)",
-    "D3": f"Away GA rate L{OVERALL_N} overall — leaky (>=1.5)",
-    "D4": f"Away conceded 8+ of L{OVERALL_N}",
-    "E1": f"Home conceded L{VENUE_N} home — exposed (>=8)",
-    "E2": f"Home BTTS-yes L{VENUE_N} home (3+)",
-    "E3": f"Home GA rate L{OVERALL_N} overall — exposed (>=1.3)",
-    "E4": f"Home conceded 8+ of L{OVERALL_N}",
-    "S1": f"Both teams sample >= {OVERALL_N} matches",
-    "S2": f"Home BTTS rate L{OVERALL_N} >= 50%",
-    "S3": f"Away BTTS rate L{OVERALL_N} >= 50%",
-    "V1": "No scoring drought (GF=0 in both L2 venue for EITHER side)",
-    "V2": "No defensive wall (GA=0 in both L2 venue for EITHER side)",
-    "V3": "No cold streak (both L2 tot<=2 BOTH sides / any L3 tot<=2)",
+    "H1": "Home goals L3 home (7+)",
+    "H2": "Home over 2.5 (L3 home)",
+    "H3": "Home over 2.5 (L6 overall)",
+    "H4": "Home BTTS (L6 home)",
+    "H5": "Home BTTS (L6 overall)",
+    "H6": "Home scored (L3 home)",
+    "H7": "Home scored (L6 overall)",
+    "A1": "Away goals L3 away (7+)",
+    "A2": "Away prev match 2+ goals",
+    "A3": "Away scored (L3 away)",
+    "A4": "Away over 2.5 (L3 away)",
+    "A5": "Away over 2.5 (L6 overall)",
+    "A6": "Away BTTS (L6 away)",
+    "A7": "Away BTTS (L6 overall)",
+    "A8": "Away scored (L6 overall)",
+    "S6": "Both teams active",
+    "S7": "Goals trend rising",
 }
-
-VETO_KEYS = ("V1", "V2", "V3")
 
 
 def _last(matches, n, venue=None):
@@ -96,110 +49,97 @@ def _rate(ms, fn):
     return sum(1 for m in ms if fn(m)) / len(ms) if ms else 0.0
 
 
-def _count(ms, fn):
-    return sum(1 for m in ms if fn(m))
-
-
-def _all(ms, fn):
-    return len(ms) > 0 and all(fn(m) for m in ms)
+def _goals_check(ms, threshold=7):
+    """7+ goals in last 3 at venue -- early season there may be only 1-2 such
+    matches, so then require a strong scoring rate (2.0+/game)."""
+    if not ms:
+        return False
+    return sum(m["gf"] for m in ms) >= threshold or \
+           (len(ms) < 3 and sum(m["gf"] for m in ms) / len(ms) >= 2.0)
 
 
 def run_checks(home_ms, away_ms):
-    """Symmetric checks + vetoes. Veto-keys failing should HARD-block a pick."""
+    h3h = _last(home_ms, 3, "H")
+    a3a = _last(away_ms, 3, "A")
+    h6 = _last(home_ms, 6)
+    a6 = _last(away_ms, 6)
+    h6H = _last(home_ms, 6, "H")
+    a6A = _last(away_ms, 6, "A")
+    h3 = _last(home_ms, 3)
+    a3 = _last(away_ms, 3)
+    last3 = (h3h + a3a)[-3:]
+    prev3 = (h3h + a3a)[-6:-3]
+    over = lambda m: _tot(m) > 2.5
+    btts = lambda m: m["gf"] > 0 and m["ga"] > 0
 
-    hv  = _last(home_ms, VENUE_N,   "H")
-    av  = _last(away_ms, VENUE_N,   "A")
-    ho  = _last(home_ms, OVERALL_N)
-    ao  = _last(away_ms, OVERALL_N)
-    hv2 = _last(home_ms, VETO_N,    "H")
-    av2 = _last(away_ms, VETO_N,    "A")
-
-    checks = {}
-
-    checks["H1"] = sum(m["gf"] for m in hv) >= 10
-    checks["H2"] = _count(hv, lambda m: _tot(m) > 2.5) >= 3
-    checks["H3"] = (sum(m["gf"] for m in ho) / len(ho) >= 1.5) if ho else False
-    checks["H4"] = _count(ho, lambda m: _tot(m) > 2.5) >= 5
-
-    checks["A1"] = sum(m["gf"] for m in av) >= 8
-    checks["A2"] = _count(av, lambda m: _tot(m) > 2.5) >= 3
-    checks["A3"] = (sum(m["gf"] for m in ao) / len(ao) >= 1.3) if ao else False
-    checks["A4"] = _count(ao, lambda m: _tot(m) > 2.5) >= 5
-
-    checks["D1"] = sum(m["ga"] for m in av) >= 10
-    checks["D2"] = _count(av, lambda m: m["gf"] > 0 and m["ga"] > 0) >= 3
-    checks["D3"] = (sum(m["ga"] for m in ao) / len(ao) >= 1.5) if ao else False
-    checks["D4"] = _count(ao, lambda m: m["ga"] >= 1) >= 8
-
-    checks["E1"] = sum(m["ga"] for m in hv) >= 8
-    checks["E2"] = _count(hv, lambda m: m["gf"] > 0 and m["ga"] > 0) >= 3
-    checks["E3"] = (sum(m["ga"] for m in ho) / len(ho) >= 1.3) if ho else False
-    checks["E4"] = _count(ho, lambda m: m["ga"] >= 1) >= 8
-
-    checks["S1"] = len(home_ms) >= OVERALL_N and len(away_ms) >= OVERALL_N
-    checks["S2"] = _rate(ho, lambda m: m["gf"] > 0 and m["ga"] > 0) >= 0.5
-    checks["S3"] = _rate(ao, lambda m: m["gf"] > 0 and m["ga"] > 0) >= 0.5
-
-    hv3 = _last(home_ms, 3, "H")
-    av3 = _last(away_ms, 3, "A")
-
-    checks["V1"] = not (
-        _all(hv2, lambda m: m["gf"] == 0) or _all(av2, lambda m: m["gf"] == 0)
-    )
-    checks["V2"] = not (
-        _all(hv2, lambda m: m["ga"] == 0) or _all(av2, lambda m: m["ga"] == 0)
-    )
-    checks["V3"] = not (
-        (_all(hv2, lambda m: _tot(m) <= 2) and _all(av2, lambda m: _tot(m) <= 2))
-        or _all(hv3, lambda m: _tot(m) <= 2)
-        or _all(av3, lambda m: _tot(m) <= 2)
-    )
-
-    return checks
+    return {
+        "H1": _goals_check(h3h),
+        "H2": sum(1 for m in h3h if over(m)) >= 2,
+        "H3": _rate(h6, over) >= 0.5,
+        "H4": _rate(h6H, btts) >= 0.5,
+        "H5": _rate(h6, btts) >= 0.5,
+        "H6": sum(1 for m in h3h if m["gf"] > 0) >= 2,
+        "H7": sum(1 for m in h3 if m["gf"] > 0) >= 2,
+        "A1": _goals_check(a3a),
+        "A2": (_tot(away_ms[-1]) >= 2) if away_ms else False,
+        "A3": sum(1 for m in a3a if m["gf"] > 0) >= 2,
+        "A4": sum(1 for m in a3a if over(m)) >= 2,
+        "A5": _rate(a6, over) >= 0.5,
+        "A6": _rate(a6A, btts) >= 0.5,
+        "A7": _rate(a6, btts) >= 0.5,
+        "A8": sum(1 for m in a3 if m["gf"] > 0) >= 2,
+        "S6": len(home_ms) >= 4 and len(away_ms) >= 4,
+        "S7": (sum(_tot(m) for m in last3) > sum(_tot(m) for m in prev3)) if len(prev3) == 3 else False,
+    }
 
 
-def any_veto_failed(checks):
-    """True if any hard-block veto tripped — callers should drop the pick."""
-    return any(not checks.get(k, True) for k in VETO_KEYS)
+def lambdas(home_ms, away_ms, lg_home=1.45, lg_away=1.15):
+    """Attack/defence-adjusted expected goals for each side."""
+    def avg(ms, venue, key):
+        sel = [m for m in ms if m["venue"] == venue]
+        return (sum(m[key] for m in sel) / len(sel)) if sel else (lg_home if key == "gf" else 1.3)
+
+    atk_h = max(0.4, avg(home_ms, "H", "gf") / lg_home)
+    dfc_h = max(0.4, avg(home_ms, "H", "ga") / lg_away)
+    atk_a = max(0.4, avg(away_ms, "A", "gf") / lg_away)
+    dfc_a = max(0.4, avg(away_ms, "A", "ga") / lg_home)
+    return (min(3.8, max(0.3, lg_home * atk_h * dfc_a)),
+            min(3.2, max(0.2, lg_away * atk_a * dfc_h)))
+
+
+def poisson_grid(lam_h, lam_a, max_goals=8):
+    ph = [math.exp(-lam_h) * lam_h ** h / math.factorial(h) for h in range(max_goals + 1)]
+    pa = [math.exp(-lam_a) * lam_a ** a / math.factorial(a) for a in range(max_goals + 1)]
+    return ph, pa
 
 
 def poisson_over25(home_ms, away_ms,
                    lg_home=1.45, lg_away=1.15, max_goals=8):
-    """P(Over 2.5) via independent Poisson lambdas from attack/defence rates.
-
-    Symmetric normalization:
-      atk_h = home GF/h   / lg_home   (home attack strength)
-      dfc_h = home GA/h   / lg_away   (home defence weakness)
-      atk_a = away GF/a   / lg_away   (away attack strength)
-      dfc_a = away GA/a   / lg_home   (away defence weakness)
-      lambda_H = lg_home * atk_h * dfc_a   (home vs away's leaky road defence)
-      lambda_A = lg_away * atk_a * dfc_h   (away vs home's leaky venue defence)
-    """
-
-    def avg(ms, venue, key, fallback_val, fallback_cnt):
-        sel = [m for m in ms if m["venue"] == venue]
-        if len(sel) >= fallback_cnt:
-            return sum(m[key] for m in sel) / len(sel)
-        return fallback_val
-
-    atk_h = max(0.4, avg(home_ms, "H", "gf", lg_home, 3) / lg_home)
-    dfc_h = max(0.4, avg(home_ms, "H", "ga", 1.3,    3) / lg_away)
-    atk_a = max(0.4, avg(away_ms, "A", "gf", lg_away, 3) / lg_away)
-    dfc_a = max(0.4, avg(away_ms, "A", "ga", 1.3,    3) / lg_home)
-
-    lam_h = min(3.8, max(0.3, lg_home * atk_h * dfc_a))
-    lam_a = min(3.2, max(0.2, lg_away * atk_a * dfc_h))
-
-    prob = 0.0
-    for h in range(max_goals + 1):
-        ph = math.exp(-lam_h) * lam_h ** h / math.factorial(h)
-        for a in range(max_goals + 1):
-            if h + a > 2.5:
-                pa = math.exp(-lam_a) * lam_a ** a / math.factorial(a)
-                prob += ph * pa
+    """P(Over 2.5) via independent Poisson lambdas from attack/defence rates."""
+    lam_h, lam_a = lambdas(home_ms, away_ms, lg_home, lg_away)
+    ph, pa = poisson_grid(lam_h, lam_a, max_goals)
+    prob = sum(ph[h] * pa[a] for h in range(max_goals + 1)
+               for a in range(max_goals + 1) if h + a > 2.5)
     return prob, lam_h, lam_a
 
 
+def market_probs(home_ms, away_ms, max_goals=8):
+    """Poisson probabilities for all supported markets."""
+    lam_h, lam_a = lambdas(home_ms, away_ms)
+    ph, pa = poisson_grid(lam_h, lam_a, max_goals)
+    p_over = sum(ph[h] * pa[a] for h in range(max_goals + 1)
+                 for a in range(max_goals + 1) if h + a > 2.5)
+    p_home = sum(ph[h] * pa[a] for h in range(max_goals + 1)
+                 for a in range(max_goals + 1) if h > a)
+    p0h, p0a = ph[0], pa[0]
+    p_btts = 1 - p0h - p0a + ph[0] * pa[0]
+    p_away_win = sum(ph[h] * pa[a] for h in range(max_goals + 1)
+                     for a in range(max_goals + 1) if h < a)
+    return {"over": p_over, "home": p_home, "btts": p_btts, "draw": 1 - p_home - p_away_win,
+            "home_sc": 1 - p0h, "away_sc": 1 - p0a}
+
+
 def xg_forecast(lam_h, lam_a):
+    # shrink raw lambdas toward a realistic band (small-sample lambdas run hot)
     t = max(1.2, 1.1 + 0.75 * (lam_h + lam_a - 2.0))
     return round(t - 0.9, 2), round(t + 0.6, 2)

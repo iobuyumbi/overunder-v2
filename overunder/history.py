@@ -2,6 +2,7 @@
 
 import json
 import os
+import sys
 import time
 import uuid
 
@@ -9,9 +10,23 @@ from .config import HISTORY_FILE
 
 
 def _load():
+    """Load history; empty or corrupt files are quarantined, never fatal.
+    (An empty file is the normal result of a user deleting history mid-day.)"""
     if os.path.exists(HISTORY_FILE):
-        with open(HISTORY_FILE, encoding="utf-8") as f:
-            return json.load(f)
+        try:
+            with open(HISTORY_FILE, encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict) and ("pending" in data or "settled" in data):
+                return data
+        except (json.JSONDecodeError, ValueError):
+            pass
+        try:
+            quarantine = HISTORY_FILE + f".corrupt-{int(time.time())}"
+            os.replace(HISTORY_FILE, quarantine)
+            print(f"WARNING: history file empty/corrupt; moved to {quarantine}, "
+                  f"starting fresh.", file=sys.stderr)
+        except OSError:
+            pass
     return {"pending": [], "settled": []}
 
 
@@ -50,6 +65,12 @@ def _settle_one(rec, hg, ag):
         return "W" if total < rec.get("line", 2.5) else "L"
     if rec["market"] == "home":
         return "W" if hg > ag else "L"
+    if rec["market"] == "btts":
+        return "W" if (hg > 0 and ag > 0) else "L"
+    if rec["market"] == "home_sc":
+        return "W" if hg > 0 else "L"
+    if rec["market"] == "away_sc":
+        return "W" if ag > 0 else "L"
     return "P"
 
 
