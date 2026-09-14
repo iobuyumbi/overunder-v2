@@ -125,7 +125,7 @@ class SoccerbaseProvider:
 
     def _get(self, url, cache_name):
         path = os.path.join(CACHE_DIR, cache_name)
-        if os.path.exists(path) and time.time() - os.path.time(path) < 6 * 3600:
+        if os.path.exists(path) and time.time() - os.path.getmtime(path) < 6 * 3600:
             with open(path, encoding="utf-8", errors="replace") as f:
                 return f.read()
         last_err = None

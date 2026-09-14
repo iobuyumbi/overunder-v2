@@ -16,6 +16,8 @@ from .teams import find_match
 
 TIME_RE = re.compile(r"^\d{2}:\d{2}$")
 INT_RE = re.compile(r"^\d+$")
+MD_LINK_RE = re.compile(r"\[([^\]]*)\]\([^ ]*\)")
+HT_SCORE_RE = re.compile(r"^HT \d{1,2}:\d{1,2}$")
 NOISE = {
     "tip", "1", "x", "2", "ht1", "htx", "ht2", "1.5", "2.5", "3.5", "bts",
     "ots", "your prediction", "advertisement", "go", "close x", "actions",
@@ -29,6 +31,8 @@ HEADERS = {
                   "(KHTML, like Gecko) Chrome/126.0 Safari/537.36",
     "Accept-Language": "en-US,en;q=0.9",
 }
+
+JINA_API_KEY = os.getenv("JINA_API_KEY", "")
 
 
 def _dbg(msg):
@@ -46,11 +50,15 @@ def _extract_html_text(html):
 def parse_card(text):
     if "<" in text and ">" in text:
         text = _extract_html_text(text)
+    text = "\n".join(
+        MD_LINK_RE.sub(r"\1", ln).replace("**", "")
+        for ln in text.splitlines()
+    )
     tokens = [t.strip() for t in text.splitlines() if t.strip()]
     matches, league, i = [], None, 0
     while i < len(tokens):
         t = tokens[i]
-        if t.lower() in NOISE:
+        if t.lower() in NOISE or HT_SCORE_RE.match(t):
             i += 1
             continue
         if ("-" in t and t == t.upper() and re.search(r"[A-Z]{3,}", t)
@@ -69,17 +77,27 @@ def parse_card(text):
 def _parse_block(tokens, i, league):
     n = len(tokens)
     j = i + 1
+
+    def skip_seps(idx):
+        while idx < n:
+            tok = tokens[idx]
+            if tok == "-" or tok.startswith("**") or HT_SCORE_RE.match(tok):
+                idx += 1
+            elif INT_RE.match(tok):
+                idx += 1
+            else:
+                break
+        return idx
+
     try:
         while j < n and not INT_RE.match(tokens[j]):
             j += 1
         votes1 = int(tokens[j]); j += 1
         votes2 = int(tokens[j]); j += 1
         tip = tokens[j]; j += 1
-        while j < n and (tokens[j] == "-" or INT_RE.match(tokens[j])):
-            j += 1
+        j = skip_seps(j)
         home = tokens[j]; j += 1
-        while j < n and (tokens[j] == "-" or INT_RE.match(tokens[j])):
-            j += 1
+        j = skip_seps(j)
         away = tokens[j]; j += 1
         stats = []
         while j < n and len(stats) < 11 and INT_RE.match(tokens[j]):
@@ -97,11 +115,17 @@ def _parse_block(tokens, i, league):
 def fetch_card(day=None, retries=2):
     day = day or date.today().isoformat()
     os.makedirs(CACHE_DIR, exist_ok=True)
+    headers_with_auth = dict(HEADERS)
+    if JINA_API_KEY:
+        headers_with_auth["Authorization"] = f"Bearer {JINA_API_KEY}"
     for attempt in range(retries + 1):
-        for name, url, cache in (("jina-proxy", JINA_PROXY, f"{day}.md"),
-                                 ("direct", STATAREA_URL, f"{day}.html")):
+        for name, url, cache, use_auth in (
+            ("jina-proxy", JINA_PROXY, f"{day}.md", True),
+            ("direct", STATAREA_URL, f"{day}.html", False),
+        ):
             try:
-                r = requests.get(url, headers=HEADERS, timeout=60)
+                hdrs = headers_with_auth if use_auth else HEADERS
+                r = requests.get(url, headers=hdrs, timeout=60)
                 _dbg(f"'{name}': HTTP {r.status_code}, {len(r.text)} bytes")
                 if not r.ok or len(r.text) < 20000:
                     continue

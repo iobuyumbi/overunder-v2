@@ -4,9 +4,19 @@ name (see .env.example) or by editing here."""
 import os
 
 
+_DOTENV_KEYS = set()
+
+
 def _load_dotenv():
     """Load KEY=VALUE pairs from a local .env (cwd, then package root).
-    Real environment variables always win. .env is gitignored -- never commit it."""
+
+    Rule:
+      - Keys injected by THIS loader can be overridden by a subsequent
+        .env file (e.g. test tempdir, or a fixture that reloads). This
+        allows explicit 'I changed cwd, now load the new .env' semantics.
+      - Keys that existed in os.environ BEFORE any .env loading (i.e.
+        real shell environment variables) are NEVER overwritten.
+    .env is gitignored -- never commit it."""
     for base in (os.getcwd(), os.path.dirname(os.path.abspath(__file__))):
         path = os.path.join(base, ".env")
         if not os.path.exists(path):
@@ -18,7 +28,10 @@ def _load_dotenv():
                     continue
                 k, _, v = line.partition("=")
                 k, v = k.strip(), v.strip().strip('"').strip("'")
-                os.environ.setdefault(k, v)
+                if k in os.environ and k not in _DOTENV_KEYS:
+                    continue
+                os.environ[k] = v
+                _DOTENV_KEYS.add(k)
         break
 
 
