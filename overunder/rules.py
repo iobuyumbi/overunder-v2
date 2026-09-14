@@ -84,6 +84,9 @@ H2H_PRED = {
     "away_sc": lambda m: m["ga"] > 0,
     "under":   lambda m: m["gf"] + m["ga"] <= 2.5,
     "no_btts": lambda m: not (m["gf"] > 0 and m["ga"] > 0),
+    "over15":  lambda m: m["gf"] + m["ga"] >= 2,
+    "under35": lambda m: m["gf"] + m["ga"] <= 3,
+    "home_dw": lambda m: m["gf"] >= m["ga"],
 }
 
 
@@ -185,8 +188,10 @@ def _negative_checks(home_ms, away_ms, market, away_name):
 
 
 def run_checks(home_ms, away_ms, market=None, home_name="", away_name=""):
-    if market in ("under", "no_btts"):
-        return _negative_checks(home_ms, away_ms, market, away_name)
+    # under35 shares under's mirrored set; home_dw shares home's extras
+    if market in ("under", "no_btts", "under35"):
+        neg = "under" if market == "under35" else market
+        return _negative_checks(home_ms, away_ms, neg, away_name)
 
     h3h = _last(home_ms, 3, "H")
     a3a = _last(away_ms, 3, "A")
@@ -220,12 +225,12 @@ def run_checks(home_ms, away_ms, market=None, home_name="", away_name=""):
         "A11": _volume_check(a3a, "ga"),
         "S6": len(home_ms) >= 4 and len(away_ms) >= 4,
     }
-    if market in ("btts", "home", "home_sc", "away_sc"):
+    if market in ("btts", "home", "home_sc", "away_sc", "home_dw"):
         # overall 4/6 reliability rules (the doubled forms of the old 2/3 rules)
         checks["A12"] = sum(1 for m in a6 if m["ga"] > 0) >= 4
         checks["A13"] = sum(1 for m in a6 if m["gf"] > 0) >= 4
         checks["H12"] = sum(1 for m in h6 if m["ga"] > 0) >= 4
-    if market == "home":
+    if market in ("home", "home_dw"):
         # result-stability rules: the host doesn't lose, the visitor doesn't win
         checks["H14"] = _freq4(h6H, lambda m: m["gf"] >= m["ga"])   # unbeaten at home
         checks["H15"] = _freq4(h6, lambda m: m["gf"] >= m["ga"])    # unbeaten overall
@@ -275,9 +280,19 @@ def market_probs(home_ms, away_ms, max_goals=8):
     p_btts = 1 - p0h - p0a + ph[0] * pa[0]
     p_away_win = sum(ph[h] * pa[a] for h in range(max_goals + 1)
                      for a in range(max_goals + 1) if h < a)
+    p_le2 = sum(ph[h] * pa[a] for h in range(max_goals + 1)
+                for a in range(max_goals + 1) if h + a <= 2)   # 0-2 goals
+    p_ge2 = 1 - p_le2 + ph[0] * pa[0] * 0  # placeholder, computed below
+    p0 = ph[0] * pa[0]
+    p1 = ph[1] * pa[0] + ph[0] * pa[1]
+    p_over15 = 1 - p0 - p1
+    p_under35 = sum(ph[h] * pa[a] for h in range(max_goals + 1)
+                    for a in range(max_goals + 1) if h + a <= 3)
     return {"over": p_over, "under": 1 - p_over, "home": p_home, "btts": p_btts,
             "no_btts": 1 - p_btts, "draw": 1 - p_home - p_away_win,
-            "home_sc": 1 - p0h, "away_sc": 1 - p0a}
+            "home_sc": 1 - p0h, "away_sc": 1 - p0a,
+            "over15": p_over15, "under35": p_under35,
+            "home_dw": 1 - p_away_win}
 
 
 def xg_forecast(lam_h, lam_a):

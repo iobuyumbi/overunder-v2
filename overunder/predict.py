@@ -9,7 +9,9 @@ from .rules import CHECK_NAMES, lambdas, market_probs, xg_forecast
 
 MARKET_LABEL = {"over": "Over 2.5", "under": "Under 2.5", "btts": "BTTS",
                 "no_btts": "BTTS No", "home": "Home win",
-                "home_sc": "Home team to score", "away_sc": "Away team to score"}
+                "home_sc": "Home team to score", "away_sc": "Away team to score",
+                "over15": "Over 1.5", "under35": "Under 3.5",
+                "home_dw": "Home or draw"}
 
 # which of the 13 checks count as 'core' per market (for the missed-list flavor)
 CORE_CHECKS = {
@@ -24,6 +26,12 @@ CORE_CHECKS = {
                 "H14", "H15", "A14", "A15", "H2H"],
     "home_sc": ["H1", "H6", "H7", "S6", "A9", "A12", "H2H"],
     "away_sc": ["A1", "A3", "A13", "S6", "H8", "H12", "H2H"],
+    # safer lines inherit their parent market's evidence
+    "over15":  ["H1", "H2", "H3", "A1", "A2", "A3", "A4", "A5", "H10", "A11", "H2H"],
+    "under35": ["H1u", "H2u", "H3u", "A1u", "A2u", "A3u", "A4u", "A5u",
+                "H10u", "A11u", "H2H"],
+    "home_dw": ["H1", "H3", "H6", "H7", "S6", "A9", "A12",
+                "H14", "H15", "A14", "A15", "H2H"],
 }
 
 
@@ -59,7 +67,8 @@ def build_pick(fixture, provider, market="over", odds=DEFAULT_ODDS, before=None)
         "date": fixture["date"], "league": fixture["league"],
         "home": fixture["home"], "away": fixture["away"],
         "market": market, "label": MARKET_LABEL[market],
-        "line": 2.5 if market in ("over", "under") else None,
+        "line": {"over": 2.5, "under": 2.5, "over15": 1.5,
+                 "under35": 3.5}.get(market),
         "confidence": conf, "model_p": round(p, 3),
         "checks_passed": passed, "checks_total": len(checks),
         "missed": missed, "ev": ev, "edge_pct": round(ev * 100, 1),

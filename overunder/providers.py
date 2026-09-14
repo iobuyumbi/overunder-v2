@@ -212,13 +212,20 @@ class SoccerbaseProvider:
                  and time.time() - os.path.getmtime(path) < 6 * 3600
         if not cached:
             print(f"[soccerbase] fetching {url}", file=_sys.stderr, flush=True)
-        if os.path.exists(path) and time.time() - os.path.getmtime(path) < 6 * 3600:
+        if cached:
             with open(path, encoding="utf-8", errors="replace") as f:
                 return f.read()
         last_err = None
         for attempt in range(3):
             try:
-                r = self._session.get(url, timeout=30)
+                req_url = url
+                if fresh:
+                    # defeat soccerbase's server-side page cache: the CDN keys
+                    # on the full URL, so a changing dummy param forces a
+                    # fresh render with the latest posted scores
+                    sep = "&" if "?" in url else "?"
+                    req_url = f"{url}{sep}_cb={int(time.time())}"
+                r = self._session.get(req_url, timeout=30)
                 print(f"[soccerbase]   -> HTTP {r.status_code}, {len(r.text)} bytes",
                       file=_sys.stderr, flush=True)
                 if r.ok and len(r.text) > 1000:

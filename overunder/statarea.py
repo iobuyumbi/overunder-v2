@@ -182,6 +182,7 @@ def cross_check(picks, games, over_min=ST_OVER_MIN, under_max=ST_UNDER_MAX, home
         if g:
             st = {"over25": g["over25"], "under25": g["under25"], "p_home": g["p_home"],
                   "p_draw": g["p_draw"], "p_away": g["p_away"], "p_btts": g["p_btts"],
+                  "p_over15": g.get("p_over15"), "p_over35": g.get("p_over35"),
                   "league": g["league"], "home": g["home"], "away": g["away"]}
             mkt = (p.get("market") or "").lower()
             if mkt.startswith("over") and g["over25"] >= over_min:
@@ -196,6 +197,12 @@ def cross_check(picks, games, over_min=ST_OVER_MIN, under_max=ST_UNDER_MAX, home
                 sig = "AGREE_AWAY_SCORE"
             elif mkt == "no_btts" and g["p_btts"] <= 40:
                 sig = "AGREE_NO_BTTS"      # statarea sees both-teams-scoring as unlikely
+            elif mkt == "over15" and g.get("p_over15", 0) >= over_min:
+                sig = "AGREE_OVER15"
+            elif mkt == "under35" and g.get("p_over35", 100) <= under_max:
+                sig = "AGREE_UNDER35"
+            elif mkt == "home_dw" and g["p_away"] <= under_max:
+                sig = "AGREE_HOME_DW"      # away side rarely wins
             elif mkt:
                 sig = "DIVERGE"
             else:

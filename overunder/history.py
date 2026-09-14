@@ -65,6 +65,12 @@ def _settle_one(rec, hg, ag):
         return "W" if total < rec.get("line", 2.5) else "L"
     if rec["market"] == "no_btts":
         return "W" if not (hg > 0 and ag > 0) else "L"
+    if rec["market"] == "over15":
+        return "W" if total >= 2 else "L"
+    if rec["market"] == "under35":
+        return "W" if total <= 3 else "L"
+    if rec["market"] == "home_dw":
+        return "W" if hg >= ag else "L"
     if rec["market"] == "home":
         return "W" if hg > ag else "L"
     if rec["market"] == "btts":

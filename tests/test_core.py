@@ -394,6 +394,36 @@ class TestHomeStabilityChecks(unittest.TestCase):
         self.assertFalse(c2["H14"] or c2["A14"])
 
 
+class TestSaferMarkets(unittest.TestCase):
+    def test_probs_and_settle(self):
+        from overunder.rules import market_probs
+        strong = [M("H", 3, 1)] * 6
+        weak = [M("A", 0, 2)] * 6
+        p = market_probs(strong, weak)
+        self.assertGreater(p["over15"], p["over"])
+        self.assertGreater(p["under35"], 0.3)
+        self.assertGreater(p["home_dw"], p["home"])
+        import tempfile, importlib
+        os.environ["OU_DATA_DIR"] = tempfile.mkdtemp(prefix="ou_safe_")
+        import overunder.config as cfg
+        importlib.reload(cfg)
+        importlib.reload(hist)
+        prov = DemoProvider()
+        fx = prov.fixtures()[0]
+        picks = [build_pick(fx, prov, market=m) for m in ("over15", "under35", "home_dw")]
+        hist.record_picks(picks)
+        n = hist.settle([{"home": fx["home"], "away": fx["away"], "hg": 2, "ag": 1}])
+        self.assertEqual(n, 3)
+        s = hist.stats()
+        self.assertEqual(list(s["overall"].values())[0]["w"], 3)
+
+    def test_safer_lines_have_gates(self):
+        from overunder.config import MARKET_MIN_CONF
+        for m in ("over15", "under35", "home_dw"):
+            self.assertIn(m, MARKET_MIN_CONF)
+            self.assertGreaterEqual(MARKET_MIN_CONF[m], 0.85)
+
+
 class TestSoccerbaseParser(unittest.TestCase):
     SAMPLE_HTML = (
         '<table><tr><td><a href="/tournaments/tournament.sd?comp_id=1">Premier League</a></td></tr>'
@@ -564,6 +594,31 @@ class TestFreshFetch(unittest.TestCase):
         prov._parse_rows = lambda html: []
         self.assertEqual(prov.results("2026-09-14"), [])
         self.assertTrue(calls["fresh"])
+
+    def test_fresh_requests_use_cache_buster(self):
+        from overunder.providers import SoccerbaseProvider
+        prov = SoccerbaseProvider.__new__(SoccerbaseProvider)
+        seen = {}
+        class FakeResp:
+            ok = True
+            status_code = 200
+            text = "<html>" + "x" * 2000 + "</html>"   # _get requires >1000 bytes
+        class FakeSession:
+            headers = {}
+            def get(self, url, timeout=30):
+                seen["url"] = url
+                return FakeResp()
+        prov._session = FakeSession()
+        prov._parse_rows = lambda html: []
+        os.makedirs(os.path.expanduser("~/.cache/overunder"), exist_ok=True)
+        prov.fresh = True
+        prov.results("2026-09-14")
+        self.assertIn("_cb=", seen["url"])      # cache-buster present
+        # non-fresh requests keep the clean URL AND must not hit the network
+        seen.pop("url")
+        prov.fresh = False
+        prov.results("2026-09-14")
+        self.assertNotIn("url", seen)           # served from cache, no fetch
 
 
 class TestDotenv(unittest.TestCase):

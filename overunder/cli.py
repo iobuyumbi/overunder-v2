@@ -213,6 +213,8 @@ def cmd_backtest(args):
         print("WARNING: history_db.json is empty -- run 'backfill --days N' first "
               "for meaningful form data.", file=sys.stderr)
     agg = {m: {"n": 0, "w": 0, "l": 0, "profit": 0.0} for m in mkts}
+    agg2 = {m: {"🔥": {"n": 0, "w": 0, "profit": 0.0},
+                "✅": {"n": 0, "w": 0, "profit": 0.0}} for m in mkts}
     TIERS = [(0.55, 0.65), (0.65, 0.75), (0.75, 0.85), (0.85, 1.01)]
     tiers = {m: {t: {"n": 0, "w": 0, "profit": 0.0} for t in TIERS} for m in mkts}
     alln = 0
@@ -244,6 +246,13 @@ def cmd_backtest(args):
                 res = _settle_one(p, r["hg"], r["ag"])
                 g = agg[mkt]
                 g["n"] += 1
+                t2 = agg2[mkt]["🔥" if p["tier"].startswith("🔥") else "✅"]
+                t2["n"] += 1
+                if res == "W":
+                    t2["w"] += 1
+                    t2["profit"] += p["stake_pct"] * (args.odds - 1)
+                elif res == "L":
+                    t2["profit"] -= p["stake_pct"]
                 for t in TIERS:
                     if t[0] <= p["confidence"] < t[1]:
                         tg = tiers[mkt][t]
@@ -282,6 +291,14 @@ def cmd_backtest(args):
                 day_n += 1
                 alln += 1
         print(f"  {d}: {len(played)} matches, {day_n} picks", file=sys.stderr)
+    print("\n== BY TIER (premium vs solid) ==")
+    for m in mkts:
+        row = f"  {m:<9}"
+        for tier_key, tier_name in (("🔥", "PREMIUM"), ("✅", "SOLID")):
+            t = agg2[m][tier_key]
+            wp = round(100 * t["w"] / t["n"], 1) if t["n"] else 0.0
+            row += f" | {tier_name}: {wp:>5}% n={t['n']:>4} {t['profit']:+.1f}u"
+        print(row)
     print("\n== WIN% BY CONFIDENCE TIER ==")
     for m in mkts:
         row = "  " + f"{m:<9}"
@@ -321,6 +338,23 @@ def cmd_team_stats(args):
     if not matches:
         sys.exit(f"no matches found for '{args.team}'")
     print(render_team_stats(args.team, matches))
+
+
+def cmd_recent(args):
+    """Show recent settled picks with their tier category, signal, and result."""
+    h = hist._load()
+    recs = h["settled"][-args.n:]
+    if not recs:
+        print("nothing settled yet")
+        return
+    print(f'{"DATE":<12}{"MATCH":<42}{"MARKET":<10}{"TIER":<10}{"SIGNAL":<18}{"SCORE":<8}R  P/L')
+    for r in recs:
+        tier = "PREMIUM" if (r.get("tier") or "").startswith("🔥") else "solid"
+        print(f"{r['date']:<12}{r['home'] + ' vs ' + r['away']:<42}"
+              f"{r.get('market','?'):<10}{tier:<10}{r.get('statarea_signal','-'):<18}"
+              f"{r.get('score','-'):<8}{r['result']}  {r.get('profit',0):+.2f}")
+    s = hist.stats()
+    print(f"\npending: {s['pending']}   settled: {s['settled_total']}")
 
 
 def cmd_retag(args):
@@ -529,6 +563,8 @@ def main(argv=None):
     p.set_defaults(fn=cmd_scrape_check)
     p = sub.add_parser("team-stats"); common(p); p.add_argument("team")
     p.set_defaults(fn=cmd_team_stats)
+    p = sub.add_parser("recent"); p.add_argument("--n", type=int, default=25)
+    p.set_defaults(fn=cmd_recent)
     p = sub.add_parser("retag"); p.add_argument("--date", default=None)
     p.add_argument("--card", default=None)
     p.set_defaults(fn=cmd_retag)

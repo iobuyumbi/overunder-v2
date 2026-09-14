@@ -36,7 +36,9 @@ def _parse_market_min_conf():
     Override with env, e.g. MARKET_MIN_CONF="over:0.80,under:0.90" """
     defaults = {"over": 0.85, "btts": 0.75, "home": 0.75,
                 "home_sc": 0.85, "away_sc": 0.80,
-                "under": 0.99, "no_btts": 0.99}
+                "under": 0.99, "no_btts": 0.99,
+                # safer lines: high floors, real breakevens are ~75-83%
+                "over15": 0.92, "under35": 0.90, "home_dw": 0.88}
     raw = os.getenv("MARKET_MIN_CONF", "")
     for pair in raw.split(","):
         if ":" in pair:

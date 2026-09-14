@@ -3,7 +3,8 @@
 from .history import yesterday_record
 
 SECTION_ICONS = {"over": "🟢", "under": "🔴", "btts": "🔵", "no_btts": "🚫",
-                 "home": "🏠", "home_sc": "🎯", "away_sc": "🎯"}
+                 "home": "🏠", "home_sc": "🎯", "away_sc": "🎯",
+                 "over15": "🟢", "under35": "🔴", "home_dw": "🛡"}
 
 
 def render_report(picks, day=None, title="Over / Under 2.5 + BTTS + Home"):
