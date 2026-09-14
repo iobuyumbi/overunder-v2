@@ -2,8 +2,8 @@
 
 from .history import yesterday_record
 
-SECTION_ICONS = {"over": "🟢", "btts": "🔵", "home": "🏠",
-                 "home_sc": "🎯", "away_sc": "🎯"}
+SECTION_ICONS = {"over": "🟢", "under": "🔴", "btts": "🔵", "no_btts": "🚫",
+                 "home": "🏠", "home_sc": "🎯", "away_sc": "🎯"}
 
 
 def render_report(picks, day=None, title="Over / Under 2.5 + BTTS + Home"):
@@ -67,8 +67,10 @@ def _pick_block(p):
         f"       • Tier: {p['tier']}" + (f"   [{sig_note}]" if sig_note else ""),
         f"     Suggested stake: {p['stake_pct']}% @ {p.get('odds',2.0)}",
         f"     Value — EV: +{p['edge_pct']}c/$  ·  Edge +{p['edge_pct']}%",
-        f"     Team goals — Home {p.get('home_attack','?')} g/m (home) · "
-        f"Away {p.get('away_attack','?')} g/m (away)",
+        f"     Team goals — Home {p.get('home_attack','?')} scored / "
+        f"{p.get('home_concede','?')} conceded g/m (at home) · Away "
+        f"{p.get('away_attack','?')} scored / {p.get('away_concede','?')} "
+        f"conceded g/m (away)",
         f"     xG forecast — {p['xg'][0]}–{p['xg'][1]} (total)",
         f"     Profile: {p['checks_passed']}/{p['checks_total']} checks passed",
     ]
@@ -78,3 +80,34 @@ def _pick_block(p):
         b.append(f"     Missed: {shown}{more}")
     b.append("")
     return b
+
+
+def render_team_stats(team, matches):
+    """Readable scoring profile: venue-split score/concede rates and trends."""
+    def agg(ms):
+        if not ms:
+            return "  (no matches)"
+        n = len(ms)
+        gf = sum(m["gf"] for m in ms); ga = sum(m["ga"] for m in ms)
+        over = sum(1 for m in ms if m["gf"] + m["ga"] > 2.5)
+        btts = sum(1 for m in ms if m["gf"] > 0 and m["ga"] > 0)
+        scor = sum(1 for m in ms if m["gf"] > 0)
+        return (f"  {n} matches | {gf} scored ({gf/n:.2f}/m) | {ga} conceded "
+                f"({ga/n:.2f}/m) | over2.5 {over}/{n} | BTTS {btts}/{n} | "
+                f"scored {scor}/{n}")
+
+    h = [m for m in matches if m["venue"] == "H"]
+    a = [m for m in matches if m["venue"] == "A"]
+    lines = [f"== TEAM SCORING PROFILE: {team} ==",
+             f"last {len(matches)} matches (point-in-time, most recent last)"]
+    lines.append("OVERALL" + agg(matches))
+    lines.append("AT HOME" + agg(h))
+    lines.append("AWAY   " + agg(a))
+    lines.append("RECENT (latest 6, oldest -> newest):")
+    for m in matches[-6:]:
+        v = "H" if m["venue"] == "H" else "A"
+        lines.append(f"  {m.get('date','?')}  {v}  {m['gf']}-{m['ga']}")
+    lines.append("")
+    lines.append("(rule checks need an opponent; see any pick block's "
+                 "'Profile: N/17' and 'Missed' lines for those)")
+    return "\n".join(lines)

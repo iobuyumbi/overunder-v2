@@ -181,6 +181,9 @@ def cmd_stats(args):
     print("BY STATAREA SIGNAL:")
     for name, g in sorted(s.get("by_signal", {}).items()):
         print(_fmt_group(name, g))
+    print("BY MARKET:")
+    for name, g in sorted(s.get("by_market", {}).items()):
+        print(_fmt_group(name, g))
     print("BY TIER:")
     for name, g in sorted(s.get("by_tier", {}).items()):
         print(_fmt_group(name, g))
@@ -208,6 +211,7 @@ def cmd_backtest(args):
     agg = {m: {"n": 0, "w": 0, "l": 0, "profit": 0.0} for m in mkts}
     alln = 0
     days_used = 0
+    audit_violations = []
     for i in range(args.days, 0, -1):
         d = (date.today() - timedelta(days=i)).isoformat()
         try:
@@ -229,12 +233,31 @@ def cmd_backtest(args):
                 res = _settle_one(p, r["hg"], r["ag"])
                 g = agg[mkt]
                 g["n"] += 1
+                profit = 0.0
                 if res == "W":
                     g["w"] += 1
-                    g["profit"] += p["stake_pct"] * (args.odds - 1)
+                    profit = p["stake_pct"] * (args.odds - 1)
                 elif res == "L":
                     g["l"] += 1
-                    g["profit"] -= p["stake_pct"]
+                    profit = -p["stake_pct"]
+                g["profit"] += profit
+                if args.audit:
+                    # lookahead detector: no form match may be dated on/after
+                    # the fixture day. Memoized cache makes this ~free.
+                    for tm in (fx["home"], fx["away"]):
+                        for m in prov.team_matches(tm, before=d):
+                            if m.get("date", "9999") >= d:
+                                audit_violations.append(
+                                    f"{d} {fx['home']} vs {fx['away']}: {tm} uses "
+                                    f"{m['date']} match ({m['gf']}-{m['ga']})")
+                                break
+                if args.verbose:
+                    mark = {"W": "+", "L": "-", "P": "o"}.get(res, "?")
+                    print(f"  [{mark}] {d} {fx['home']} vs {fx['away']} | {mkt:<8} "
+                          f"conf {p['confidence']:.2f} | H {p.get('home_attack','?')}/"
+                          f"{p.get('home_concede','?')} A {p.get('away_attack','?')}/"
+                          f"{p.get('away_concede','?')} (scored/conceded) | "
+                          f"{r['hg']}-{r['ag']} ({profit:+.1f})")
                 day_n += 1
                 alln += 1
         print(f"  {d}: {len(played)} matches, {day_n} picks", file=sys.stderr)
@@ -248,8 +271,26 @@ def cmd_backtest(args):
               f"profit {g['profit']:+.2f} units")
     wp = round(100 * tw / alln, 1) if alln else 0.0
     print(f"  {'TOTAL':<10} {alln:>3} picks  {tw}W-{tl}L  {wp:>5}%")
+    if args.audit:
+        print(f"\nAUDIT: {len(audit_violations)} lookahead violations "
+              f"across {alln} picks")
+        for v in audit_violations[:10]:
+            print("  " + v)
+        if not audit_violations:
+            print("  clean: every pick used only pre-match form")
     print(f"({days_used} match days replayed, min_confidence {min_conf}, "
           f"odds {args.odds})")
+
+
+def cmd_team_stats(args):
+    """Scoring profile for one team: venue-split score/concede rates, over and
+    BTTS rates, recent results -- the exact form data the rules consume."""
+    from .report import render_team_stats
+    prov = DemoProvider() if args.demo else _provider(False)
+    matches = prov.team_matches(args.team)
+    if not matches:
+        sys.exit(f"no matches found for '{args.team}'")
+    print(render_team_stats(args.team, matches))
 
 
 def cmd_backfill(args):
@@ -272,8 +313,8 @@ def cmd_backfill(args):
             continue
         days_ok += 1
         for r in rows:
-            added += db_add_match(db, r["home"], "H", r["hg"], r["ag"], d)
-            added += db_add_match(db, r["away"], "A", r["ag"], r["hg"], d)
+            added += db_add_match(db, r["home"], "H", r["hg"], r["ag"], d, opp=r["away"])
+            added += db_add_match(db, r["away"], "A", r["ag"], r["hg"], d, opp=r["home"])
         if rows:
             print(f"{d}: {len(rows)} results", file=sys.stderr)
         if i % 10 == 9:
@@ -420,21 +461,26 @@ def main(argv=None):
     p.set_defaults(fn=cmd_settle)
     p = sub.add_parser("stats"); p.add_argument("--json", action="store_true")
     p.set_defaults(fn=cmd_stats)
-    p = sub.add_parser("report"); common(p); p.add_argument("--markets", default="over,btts,home")
+    p = sub.add_parser("report"); common(p)
+    p.add_argument("--markets", default="over,btts,home,home_sc,away_sc")
     p.add_argument("--days", type=int, default=1)
     p.set_defaults(fn=cmd_report)
     p = sub.add_parser("scrape-check"); p.add_argument("--date", default=None)
     p.add_argument("--team", default=None, help="debug one team's page parse")
     p.set_defaults(fn=cmd_scrape_check)
+    p = sub.add_parser("team-stats"); common(p); p.add_argument("team")
+    p.set_defaults(fn=cmd_team_stats)
     p = sub.add_parser("backfill"); p.add_argument("--days", type=int, default=120)
     p.add_argument("--sleep", type=float, default=1.0, help="seconds between day fetches")
     p.set_defaults(fn=cmd_backfill)
     p = sub.add_parser("verify"); p.add_argument("--n", type=int, default=50)
     p.set_defaults(fn=cmd_verify)
     p = sub.add_parser("backtest"); p.add_argument("--days", type=int, default=30)
-    p.add_argument("--markets", default="over")
+    p.add_argument("--markets", default="over,btts,home,home_sc,away_sc")
     p.add_argument("--odds", type=float, default=config.DEFAULT_ODDS)
     p.add_argument("--min-conf", type=float, default=config.O25_MIN_CONFIDENCE)
+    p.add_argument("--verbose", action="store_true", help="print every replayed pick")
+    p.add_argument("--audit", action="store_true", help="detect lookahead leaks")
     p.set_defaults(fn=cmd_backtest)
     p = sub.add_parser("fetch-statarea"); p.add_argument("--date", default=None)
     p.set_defaults(fn=cmd_fetch_statarea)

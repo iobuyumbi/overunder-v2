@@ -7,16 +7,22 @@ from .config import (DEFAULT_ODDS, KELLY_FRACTION, MAX_STAKE_PCT, O25_MIN_CONFID
                      PREMIUM_TIER)
 from .rules import CHECK_NAMES, lambdas, market_probs, xg_forecast
 
-MARKET_LABEL = {"over": "Over 2.5", "btts": "BTTS", "home": "Home win",
+MARKET_LABEL = {"over": "Over 2.5", "under": "Under 2.5", "btts": "BTTS",
+                "no_btts": "BTTS No", "home": "Home win",
                 "home_sc": "Home team to score", "away_sc": "Away team to score"}
 
 # which of the 13 checks count as 'core' per market (for the missed-list flavor)
 CORE_CHECKS = {
-    "over":    ["H1", "H2", "H3", "A1", "A2", "A3", "A4", "A5"],
-    "btts":    ["H4", "H5", "H6", "A3", "A6", "A7", "A8"],
-    "home":    ["H1", "H3", "H6", "H7", "S6", "S7", "A5"],
-    "home_sc": ["H1", "H6", "H7", "S6"],
-    "away_sc": ["A1", "A3", "A8", "S6"],
+    "over":    ["H1", "H2", "H3", "A1", "A2", "A3", "A4", "A5", "H10", "A11", "H2H"],
+    "under":   ["H1u", "H2u", "H3u", "A1u", "A2u", "A3u", "A4u", "A5u",
+                "H10u", "A11u", "H2H"],
+    "btts":    ["H4", "H5", "H6", "A3", "A6", "A7", "A8", "H8", "H9", "A9", "A10",
+                "H11", "A12", "A13", "H12", "H2H"],
+    "no_btts": ["H4n", "H5n", "H6n", "H8n", "H9n", "A3n", "A6n", "A7n", "A8n",
+                "A9n", "A10n", "H2H"],
+    "home":    ["H1", "H3", "H6", "H7", "S6", "A9", "A10", "H2H"],
+    "home_sc": ["H1", "H6", "H7", "S6", "A9", "H11", "A12", "H2H"],
+    "away_sc": ["A1", "A3", "A8", "S6", "H8", "A13", "H12", "H2H"],
 }
 
 
@@ -27,15 +33,16 @@ def build_pick(fixture, provider, market="over", odds=DEFAULT_ODDS, before=None)
     home_ms = provider.team_matches(fixture["home"], before=before)
     away_ms = provider.team_matches(fixture["away"], before=before)
     from .rules import run_checks
-    checks = run_checks(home_ms, away_ms)
+    checks = run_checks(home_ms, away_ms, market=market,
+                        home_name=fixture["home"], away_name=fixture["away"])
     passed = sum(checks.values())
     probs = market_probs(home_ms, away_ms)
     p = probs[market]
     lam_h, lam_a = lambdas(home_ms, away_ms)
 
-    def gpg(ms, venue=None):
+    def gpg(ms, venue=None, key="gf"):
         sel = [m for m in ms if venue is None or m["venue"] == venue]
-        return round(sum(m["gf"] for m in sel) / len(sel), 2) if sel else 0.0
+        return round(sum(m[key] for m in sel) / len(sel), 2) if sel else 0.0
 
     conf = min(0.98, p * (0.70 + 0.30 * passed / len(checks)))
     conf = round(conf, 3)
@@ -51,15 +58,17 @@ def build_pick(fixture, provider, market="over", odds=DEFAULT_ODDS, before=None)
         "date": fixture["date"], "league": fixture["league"],
         "home": fixture["home"], "away": fixture["away"],
         "market": market, "label": MARKET_LABEL[market],
-        "line": 2.5 if market == "over" else None,
+        "line": 2.5 if market in ("over", "under") else None,
         "confidence": conf, "model_p": round(p, 3),
         "checks_passed": passed, "checks_total": len(checks),
         "missed": missed, "ev": ev, "edge_pct": round(ev * 100, 1),
         "stake_pct": stake, "odds": odds, "tier": tier,
         "xg": [lo, hi],
-        "home_attack": gpg(home_ms, "H"), "home_concede": None,
-        "away_attack": gpg(away_ms, "A"),
+        "home_attack": gpg(home_ms, "H"), "home_concede": gpg(home_ms, "H", "ga"),
+        "away_attack": gpg(away_ms, "A"), "away_concede": gpg(away_ms, "A", "ga"),
         "home_gpg_all": gpg(home_ms), "away_gpg_all": gpg(away_ms),
+        "home_concede_all": gpg(home_ms, None, "ga"),
+        "away_concede_all": gpg(away_ms, None, "ga"),
     }
 
 

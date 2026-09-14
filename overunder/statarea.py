@@ -190,6 +190,12 @@ def cross_check(picks, games, over_min=ST_OVER_MIN, under_max=ST_UNDER_MAX, home
                 sig = "AGREE_UNDER"
             elif mkt in ("home", "1") and g["p_home"] >= home_min:
                 sig = "AGREE_HOME"
+            elif mkt == "home_sc" and g["p_home"] >= home_min:
+                sig = "AGREE_HOME_SCORE"      # strong home side usually scores
+            elif mkt == "away_sc" and g["p_away"] >= 50:
+                sig = "AGREE_AWAY_SCORE"
+            elif mkt == "no_btts" and g["p_btts"] <= 40:
+                sig = "AGREE_NO_BTTS"      # statarea sees both-teams-scoring as unlikely
             elif mkt:
                 sig = "DIVERGE"
             else:

@@ -63,6 +63,8 @@ def _settle_one(rec, hg, ag):
         return "W" if total > rec.get("line", 2.5) else "L"
     if rec["market"] == "under":
         return "W" if total < rec.get("line", 2.5) else "L"
+    if rec["market"] == "no_btts":
+        return "W" if not (hg > 0 and ag > 0) else "L"
     if rec["market"] == "home":
         return "W" if hg > ag else "L"
     if rec["market"] == "btts":
@@ -123,6 +125,7 @@ def stats():
         "overall": _group_stats(s, lambda r: "all"),
         "by_signal": _group_stats(s, lambda r: r.get("statarea_signal")),
         "by_tier": _group_stats(s, lambda r: r.get("tier")),
+        "by_market": _group_stats(s, lambda r: r.get("market")),
         "pending": len(h["pending"]),
         "settled_total": len(s),
     }

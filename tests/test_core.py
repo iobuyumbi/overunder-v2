@@ -111,6 +111,7 @@ class TestPredictSettle(unittest.TestCase):
         stats = hist.stats()
         self.assertEqual(stats["settled_total"], len(fx))
         self.assertIn("by_signal", stats)
+        self.assertIn("over", stats["by_market"])
 
 
 class TestMarkets(unittest.TestCase):
@@ -248,18 +249,51 @@ class TestHistoryDB(unittest.TestCase):
 
 
 class TestRulesVenueOverall(unittest.TestCase):
-    def test_seventeen_checks(self):
+    def test_check_counts(self):
         home = [M("H", 3, 1), M("H", 2, 2), M("H", 3, 0), M("A", 1, 1),
                 M("H", 2, 1), M("A", 2, 2)]
-        checks = run_checks(home, home)
-        self.assertEqual(len(checks), 17)
-        # strong scoring team at home: venue + overall checks pass together
+        checks = run_checks(home, home)          # no market -> 22 checks, no H2H
+        self.assertEqual(len(checks), 22)
+        self.assertNotIn("H2H", checks)
+        with_h2h = run_checks(home, home, market="over", home_name="A", away_name="B")
+        self.assertEqual(len(with_h2h), 23)
+        self.assertIn("H2H", with_h2h)
         self.assertTrue(checks["H1"] and checks["H3"] and checks["H6"] and checks["H7"])
-        # weak away scoring: away venue checks fail while overall may differ
         weak = [M("A", 0, 1), M("A", 1, 0), M("A", 0, 0), M("H", 0, 0),
                 M("A", 0, 1), M("H", 0, 0)]
         c2 = run_checks(home, weak)
         self.assertFalse(c2["A1"] or c2["A3"])
+
+    def test_concede_checks(self):
+        leaky_h = [M("H", 2, 3), M("H", 1, 4), M("H", 3, 2), M("A", 0, 1),
+                   M("H", 2, 2), M("A", 1, 1)]   # leaks at home and overall
+        leaky_a = [M("H", 1, 0), M("A", 0, 3), M("A", 1, 4), M("H", 0, 0),
+                   M("A", 2, 2), M("A", 3, 1)]   # leaks away and overall
+        tight = [M("H", 1, 0), M("H", 2, 0), M("H", 3, 0), M("A", 0, 0),
+                 M("H", 1, 0), M("A", 0, 0)]     # clean sheets everywhere
+        c_leaky = run_checks(leaky_h, leaky_a)
+        c_tight = run_checks(tight, tight)
+        self.assertTrue(c_leaky["H8"] and c_leaky["H9"] and c_leaky["H10"])
+        self.assertTrue(c_leaky["A9"] and c_leaky["A10"] and c_leaky["A11"])
+        self.assertFalse(c_tight["H8"] or c_tight["H10"] or c_tight["A9"] or c_tight["A11"])
+
+    def test_h2h_check(self):
+        from overunder.rules import h2h_check
+        def H(gf, ga, d, opp): return {"venue": "H", "gf": gf, "ga": ga, "date": d, "opp": opp}
+        # last 4 vs Leeds: totals 3, 2, 3, 0 -> 2 overs of 4 -> passes (2*2>=4)
+        ms = [H(2, 1, "2026-01-01", "Leeds"), H(1, 1, "2026-02-01", "Leeds"),
+              H(3, 0, "2026-03-01", "Leeds"), H(0, 0, "2026-04-01", "Leeds"),
+              H(5, 5, "2026-05-01", "Other")]   # 'Other' must be excluded
+        self.assertTrue(h2h_check(ms, "over", "Leeds"))      # 2/4 overs >= half
+        self.assertTrue(h2h_check(ms, "home_sc", "Leeds"))   # scored in 3/4
+        self.assertTrue(h2h_check(ms, "btts", "Leeds"))      # BTTS in 2/4 -> pass (>= half)
+        ms_low = [H(0, 0, "2026-01-01", "Leeds"), H(1, 0, "2026-02-01", "Leeds")]
+        self.assertFalse(h2h_check(ms_low, "over", "Leeds"))  # 0/2 overs
+        # single meeting counts: 1/1 if the expected result appeared
+        self.assertTrue(h2h_check(ms[:1], "over", "Leeds"))   # one 2-1 over
+        self.assertFalse(h2h_check(ms[1:2], "over", "Leeds")) # one 1-1, not over
+        # teams that never met: neutral pass
+        self.assertTrue(h2h_check(ms, "over", "Tottenham"))
 
 
 class TestNoLookahead(unittest.TestCase):
@@ -278,6 +312,56 @@ class TestNoLookahead(unittest.TestCase):
         fx = prov.fixtures()[0]   # date 2026-09-12
         p = build_pick(fx, prov)  # before = fixture date -> demo Aug form only
         self.assertGreater(p["confidence"], 0.3)
+
+
+class TestFourOfSixAndNegativeMarkets(unittest.TestCase):
+    def test_four_of_six_checks(self):
+        regular = [M("H", 2, 1), M("A", 1, 0), M("H", 0, 1), M("A", 2, 2),
+                   M("H", 1, 1), M("A", 1, 0)]   # scored 5/6, conceded 4/6
+        c = run_checks(regular, regular, market="btts", home_name="A", away_name="B")
+        self.assertTrue(c["H11"])   # scored 4+/6
+        self.assertTrue(c["H12"])   # concedes 4+/6
+        self.assertTrue(c["A13"])
+        self.assertTrue(c["A12"])
+
+    def test_under_market_checks(self):
+        weak = [M("H", 1, 0), M("H", 0, 1), M("H", 1, 0), M("A", 0, 0),
+                M("H", 0, 0), M("A", 1, 0)]      # low scoring, tight defence
+        c = run_checks(weak, weak, market="under", home_name="A", away_name="B")
+        self.assertEqual(len(c), 12)             # 10 under + S6 + H2H
+        self.assertTrue(c["H1u"] and c["H10u"] and c["A1u"] and c["A11u"])
+        self.assertTrue(c["H2u"] and c["H3u"])
+        strong = [M("H", 3, 1)] * 6
+        c2 = run_checks(strong, strong, market="under", home_name="A", away_name="B")
+        self.assertFalse(c2["H1u"] or c2["H2u"] or c2["H10u"])
+
+    def test_no_btts_checks(self):
+        blanky = [M("H", 1, 0), M("H", 0, 0), M("H", 2, 0), M("A", 0, 0),
+                  M("H", 0, 0), M("A", 1, 0)]    # blanks a lot, keeps clean sheets
+        c = run_checks(blanky, blanky, market="no_btts", home_name="A", away_name="B")
+        self.assertEqual(len(c), 13)             # 11 no_btts + S6 + H2H
+        self.assertTrue(c["H6n"] and c["H8n"] and c["H9n"])
+        self.assertTrue(c["H4n"] and c["A6n"])   # almost no BTTS in its games
+        # market_probs exposes both directions
+        from overunder.rules import market_probs
+        p = market_probs(blanky, blanky)
+        self.assertAlmostEqual(p["over"] + p["under"], 1.0)
+        self.assertAlmostEqual(p["btts"] + p["no_btts"], 1.0)
+
+    def test_settle_under_no_btts(self):
+        import tempfile, importlib
+        os.environ["OU_DATA_DIR"] = tempfile.mkdtemp(prefix="ou_neg_")
+        import overunder.config as cfg
+        importlib.reload(cfg)
+        importlib.reload(hist)
+        prov = DemoProvider()
+        fx = prov.fixtures()[0]
+        hist.record_picks([build_pick(fx, prov, market="under"),
+                           build_pick(fx, prov, market="no_btts")])
+        n = hist.settle([{"home": fx["home"], "away": fx["away"], "hg": 1, "ag": 0}])
+        self.assertEqual(n, 2)
+        s = hist.stats()
+        self.assertEqual(list(s["overall"].values())[0]["w"], 2)
 
 
 class TestSoccerbaseParser(unittest.TestCase):
@@ -394,6 +478,23 @@ class TestMultiDay(unittest.TestCase):
               "--markets", "over"])  # window starts on demo fixtures day
         s = hist.stats()
         self.assertGreaterEqual(s["pending"], 1)
+
+
+class TestTeamStats(unittest.TestCase):
+    def test_render_team_stats(self):
+        from overunder.report import render_team_stats
+        prov = DemoProvider()
+        txt = render_team_stats("St Gallen", prov.team_matches("St Gallen"))
+        self.assertIn("TEAM SCORING PROFILE: St Gallen", txt)
+        self.assertIn("AT HOME", txt)
+        self.assertIn("scored (", txt)
+
+    def test_pick_has_concede_rates(self):
+        prov = DemoProvider()
+        p = build_pick(prov.fixtures()[0], prov)
+        self.assertIn("home_concede", p)
+        self.assertIn("away_concede", p)
+        self.assertGreaterEqual(p["home_concede"], 0)
 
 
 class TestDotenv(unittest.TestCase):
