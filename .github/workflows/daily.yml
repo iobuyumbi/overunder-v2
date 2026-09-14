@@ -1,11 +1,17 @@
 name: daily
+# Cloud pipeline. NOTE: GitHub runner IPs are often blocked by soccerbase and
+# statarea, so scraping steps are best-effort (continue-on-error). The
+# authoritative daily run is run_local.bat / run_daily.sh on your machine;
+# use this as a backup that never blocks, plus artifact backup of data/.
+# Secrets (optional): TELEGRAM_TOKEN, TELEGRAM_CHAT_ID in repo Settings ->
+# Secrets and variables -> Actions.
 on:
   schedule:
     - cron: "0 9 * * *"     # 09:00 UTC daily
   workflow_dispatch:
 
 jobs:
-  run:
+  daily:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -13,14 +19,21 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install -r requirements.txt
-      - run: python -m overunder fetch-statarea
+      - name: tests first -- never run a broken pipeline
+        run: python -m unittest discover -s tests
+      - name: cache statarea card (best-effort)
+        run: python -m overunder fetch-statarea
         continue-on-error: true
-      - run: python -m overunder predict --statarea
+      - name: predict (best-effort from cloud IP)
+        run: python -m overunder predict --statarea
         continue-on-error: true
-      - run: python -m overunder settle
+      - name: settle pending (works if results pages are reachable)
+        run: python -m overunder settle
         continue-on-error: true
-      - run: python -m overunder stats
+      - name: stats snapshot
+        run: python -m overunder stats
       - uses: actions/upload-artifact@v4
         with:
-          name: history
+          name: data-backup-${{ github.run_id }}
           path: data/
+          retention-days: 30

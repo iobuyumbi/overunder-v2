@@ -13,3 +13,7 @@ data/
 api_key.txt
 *.pem
 *.key
+
+# prediction_history.json is gitignored by default (it's machine-local state).
+# To version it as an offsite backup, commit it explicitly:
+#   git add -f data/prediction_history.json
