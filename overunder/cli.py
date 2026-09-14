@@ -426,21 +426,26 @@ def cmd_verify(args):
     prov = SoccerbaseProvider()
     prov.fresh = True   # audit against live scores
     checked = missing = mismatched = 0
+    # fetch each date's results ONCE, check every pick against that snapshot
+    by_date = {}
     for rec in h["settled"][-args.n:]:
+        by_date.setdefault(rec["date"], []).append(rec)
+    for day, recs in by_date.items():
         try:
-            rows = prov.results(rec["date"])
+            rows = prov.results(day)
         except RuntimeError:
             continue
-        g, _ = find_match(rec["home"], rec["away"], rows)
-        if not g:
-            missing += 1
-            print(f"  MISSING in scrape: {rec['home']} vs {rec['away']} ({rec['date']})")
-            continue
-        checked += 1
-        if rec.get("score") and rec["score"] != f"{g['hg']}-{g['ag']}":
-            mismatched += 1
-            print(f"  MISMATCH {rec['home']} vs {rec['away']}: history {rec['score']} "
-                  f"vs scrape {g['hg']}-{g['ag']}")
+        for rec in recs:
+            g, _ = find_match(rec["home"], rec["away"], rows)
+            if not g:
+                missing += 1
+                print(f"  MISSING in scrape: {rec['home']} vs {rec['away']} ({rec['date']})")
+                continue
+            checked += 1
+            if rec.get("score") and rec["score"] != f"{g['hg']}-{g['ag']}":
+                mismatched += 1
+                print(f"  MISMATCH {rec['home']} vs {rec['away']}: history {rec['score']} "
+                      f"vs scrape {g['hg']}-{g['ag']}")
     day = date.today().isoformat()
     try:
         html = prov._get(f"{prov.BASE}/matches/results.sd?date={day}",
