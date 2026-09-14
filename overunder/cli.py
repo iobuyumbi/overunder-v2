@@ -63,7 +63,8 @@ def _maybe_tag_statarea(picks, args):
 
 def cmd_demo(args):
     prov = DemoProvider()
-    picks = predict_day(prov, day=args.date, markets=_markets(args.markets))
+    picks = predict_day(prov, day=args.date, markets=_markets(args.markets),
+                        market_min_conf={})   # flat 0.55: showcase the machinery
     sample_card = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                "sample_data", "sample_card_2026-09-12.md")
     games = st.parse_card(open(sample_card, encoding="utf-8").read())
@@ -85,12 +86,14 @@ def cmd_predict(args):
     prov = _provider(args.demo)
     mkts = _markets(args.markets)
     picks = []
+    demo_bypass = {} if args.demo else None
     for d in _date_range(args):
         try:
             fxs = prov.fixtures(d)
             print(f"predicting {len(fxs)} fixtures x {len(mkts)} markets for {d}...",
                   file=sys.stderr, flush=True)
-            picks += predict_day(prov, day=d, odds=args.odds, markets=mkts)
+            picks += predict_day(prov, day=d, odds=args.odds, markets=mkts,
+                                 market_min_conf=demo_bypass)
         except RuntimeError as e:
             print(f"PREDICT FAILED for {d}: {e}", file=sys.stderr)
             if getattr(args, "days", 1) == 1:
@@ -142,6 +145,7 @@ def cmd_compare(args):
 
 def cmd_settle(args):
     prov = DemoProvider() if args.demo else _provider(False)
+    prov.fresh = True   # settlement needs live scores, not the 6h cache
     if args.date:
         n = hist.settle(prov.results(args.date))
         print(f"settled {n} picks for {args.date}")
@@ -178,15 +182,15 @@ def cmd_stats(args):
     print("== PREDICTION STATS ==")
     for name, g in s.get("overall", {}).items():
         print("OVERALL      " + _fmt_group(name, g)[2:])
-    print("BY STATAREA SIGNAL:")
-    for name, g in sorted(s.get("by_signal", {}).items()):
-        print(_fmt_group(name, g))
-    print("BY MARKET:")
-    for name, g in sorted(s.get("by_market", {}).items()):
-        print(_fmt_group(name, g))
-    print("BY TIER:")
-    for name, g in sorted(s.get("by_tier", {}).items()):
-        print(_fmt_group(name, g))
+    def _show(title, groups):
+        print(title)
+        if not groups:
+            print("  (none settled yet)")
+        for name, g in sorted(groups.items()):
+            print(_fmt_group(name, g))
+    _show("BY STATAREA SIGNAL:", s.get("by_signal", {}))
+    _show("BY MARKET:", s.get("by_market", {}))
+    _show("BY TIER:", s.get("by_tier", {}))
     print(f"pending: {s['pending']}   settled: {s['settled_total']}")
 
 
@@ -209,6 +213,8 @@ def cmd_backtest(args):
         print("WARNING: history_db.json is empty -- run 'backfill --days N' first "
               "for meaningful form data.", file=sys.stderr)
     agg = {m: {"n": 0, "w": 0, "l": 0, "profit": 0.0} for m in mkts}
+    TIERS = [(0.55, 0.65), (0.65, 0.75), (0.75, 0.85), (0.85, 1.01)]
+    tiers = {m: {t: {"n": 0, "w": 0, "profit": 0.0} for t in TIERS} for m in mkts}
     alln = 0
     days_used = 0
     audit_violations = []
@@ -228,11 +234,26 @@ def cmd_backtest(args):
                   "home": r["home"], "away": r["away"]}
             for mkt in mkts:
                 p = build_pick(fx, prov, market=mkt, odds=args.odds, before=d)
-                if p["confidence"] < min_conf:
+                if args.no_market_thresholds:
+                    thr = min_conf
+                else:
+                    from .config import MARKET_MIN_CONF as _MMC
+                    thr = _MMC.get(mkt) or min_conf
+                if p["confidence"] < thr:
                     continue
                 res = _settle_one(p, r["hg"], r["ag"])
                 g = agg[mkt]
                 g["n"] += 1
+                for t in TIERS:
+                    if t[0] <= p["confidence"] < t[1]:
+                        tg = tiers[mkt][t]
+                        tg["n"] += 1
+                        if res == "W":
+                            tg["w"] += 1
+                            tg["profit"] += p["stake_pct"] * (args.odds - 1)
+                        elif res == "L":
+                            tg["profit"] -= p["stake_pct"]
+                        break
                 profit = 0.0
                 if res == "W":
                     g["w"] += 1
@@ -261,6 +282,15 @@ def cmd_backtest(args):
                 day_n += 1
                 alln += 1
         print(f"  {d}: {len(played)} matches, {day_n} picks", file=sys.stderr)
+    print("\n== WIN% BY CONFIDENCE TIER ==")
+    for m in mkts:
+        row = "  " + f"{m:<9}"
+        for t in TIERS:
+            tg = tiers[m][t]
+            wp = round(100 * tg["w"] / tg["n"], 1) if tg["n"] else 0.0
+            row += f" | {t[0]:.2f}-{min(t[1],1.0):.2f}: {wp:>5}% n={tg['n']:>4}"
+        print(row)
+    print("(if higher tiers are not clearly better, raising min_conf buys nothing)")
     print("\n== BACKTEST (hypothetical, no-lookahead) ==")
     tw = tl = 0
     for m in mkts:
@@ -291,6 +321,34 @@ def cmd_team_stats(args):
     if not matches:
         sys.exit(f"no matches found for '{args.team}'")
     print(render_team_stats(args.team, matches))
+
+
+def cmd_retag(args):
+    """Re-tag PENDING picks with the current statarea card. Fixes labels that
+    were recorded under a broken card (e.g. the header-shift bug) without
+    touching settled history. Settled picks are never modified."""
+    try:
+        text = st.load_card_file(args.card) if getattr(args, "card", None) else st.load_card(args.date)
+    except Exception as e:
+        sys.exit(f"retag: no statarea card available ({e})")
+    games = st.parse_card(text)
+    h = hist._load()
+    changed = skipped = 0
+    for rec in h["pending"]:
+        pick = {"home": rec["home"], "away": rec["away"],
+                "market": rec.get("market", "over")}
+        out = st.cross_check([pick], games)[0]
+        new_sig = out["statarea_signal"]
+        if new_sig != rec.get("statarea_signal") or out["match_score"] != rec.get("match_score"):
+            rec["statarea"] = out["statarea"]
+            rec["statarea_signal"] = new_sig
+            rec["match_score"] = out["match_score"]
+            changed += 1
+        else:
+            skipped += 1
+    hist._save(h)
+    print(f"retagged {changed} pending picks ({skipped} unchanged). "
+          f"Settled history untouched.")
 
 
 def cmd_backfill(args):
@@ -332,6 +390,7 @@ def cmd_verify(args):
     from .teams import find_match
     h = hist._load()
     prov = SoccerbaseProvider()
+    prov.fresh = True   # audit against live scores
     checked = missing = mismatched = 0
     for rec in h["settled"][-args.n:]:
         try:
@@ -452,7 +511,7 @@ def main(argv=None):
     p.set_defaults(fn=cmd_demo)
     p = sub.add_parser("predict"); common(p); p.add_argument("--odds", type=float, default=config.DEFAULT_ODDS)
     p.add_argument("--statarea", action="store_true"); p.add_argument("--card")
-    p.add_argument("--markets", default="over", help="comma list: over,btts,home,home_sc,away_sc")
+    p.add_argument("--markets", default="over", help="comma list: over,under,btts,no_btts,home,home_sc,away_sc")
     p.add_argument("--days", type=int, default=1, help="predict N days from --date (default today)")
     p.set_defaults(fn=cmd_predict)
     p = sub.add_parser("compare"); common(p); p.add_argument("--picks", required=True)
@@ -462,7 +521,7 @@ def main(argv=None):
     p = sub.add_parser("stats"); p.add_argument("--json", action="store_true")
     p.set_defaults(fn=cmd_stats)
     p = sub.add_parser("report"); common(p)
-    p.add_argument("--markets", default="over,btts,home,home_sc,away_sc")
+    p.add_argument("--markets", default="over,under,btts,no_btts,home,home_sc,away_sc")
     p.add_argument("--days", type=int, default=1)
     p.set_defaults(fn=cmd_report)
     p = sub.add_parser("scrape-check"); p.add_argument("--date", default=None)
@@ -470,17 +529,22 @@ def main(argv=None):
     p.set_defaults(fn=cmd_scrape_check)
     p = sub.add_parser("team-stats"); common(p); p.add_argument("team")
     p.set_defaults(fn=cmd_team_stats)
+    p = sub.add_parser("retag"); p.add_argument("--date", default=None)
+    p.add_argument("--card", default=None)
+    p.set_defaults(fn=cmd_retag)
     p = sub.add_parser("backfill"); p.add_argument("--days", type=int, default=120)
     p.add_argument("--sleep", type=float, default=1.0, help="seconds between day fetches")
     p.set_defaults(fn=cmd_backfill)
     p = sub.add_parser("verify"); p.add_argument("--n", type=int, default=50)
     p.set_defaults(fn=cmd_verify)
     p = sub.add_parser("backtest"); p.add_argument("--days", type=int, default=30)
-    p.add_argument("--markets", default="over,btts,home,home_sc,away_sc")
+    p.add_argument("--markets", default="over,under,btts,no_btts,home,home_sc,away_sc")
     p.add_argument("--odds", type=float, default=config.DEFAULT_ODDS)
     p.add_argument("--min-conf", type=float, default=config.O25_MIN_CONFIDENCE)
     p.add_argument("--verbose", action="store_true", help="print every replayed pick")
     p.add_argument("--audit", action="store_true", help="detect lookahead leaks")
+    p.add_argument("--no-market-thresholds", action="store_true",
+                   help="flat --min-conf for all markets (threshold analysis)")
     p.set_defaults(fn=cmd_backtest)
     p = sub.add_parser("fetch-statarea"); p.add_argument("--date", default=None)
     p.set_defaults(fn=cmd_fetch_statarea)

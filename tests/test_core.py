@@ -135,9 +135,20 @@ class TestMarkets(unittest.TestCase):
     def test_predict_day_markets(self):
         from overunder.predict import predict_day
         prov = DemoProvider()
-        picks = predict_day(prov, markets=("over", "btts", "home"))
+        picks = predict_day(prov, markets=("over", "btts", "home"),
+                            market_min_conf={})          # flat gate for the test
         mkts = {p["market"] for p in picks}
         self.assertIn("over", mkts)
+
+    def test_market_thresholds_gate(self):
+        from overunder.predict import predict_day
+        from overunder.config import MARKET_MIN_CONF
+        prov = DemoProvider()
+        # with production thresholds, every pick must clear its market gate
+        picks = predict_day(prov, markets=tuple(MARKET_MIN_CONF))
+        for p in picks:
+            self.assertGreaterEqual(p["confidence"],
+                                    MARKET_MIN_CONF.get(p["market"], 0.55))
 
     def test_settle_btts(self):
         import tempfile, importlib
@@ -252,11 +263,11 @@ class TestRulesVenueOverall(unittest.TestCase):
     def test_check_counts(self):
         home = [M("H", 3, 1), M("H", 2, 2), M("H", 3, 0), M("A", 1, 1),
                 M("H", 2, 1), M("A", 2, 2)]
-        checks = run_checks(home, home)          # no market -> 22 checks, no H2H
-        self.assertEqual(len(checks), 22)
+        checks = run_checks(home, home)          # no market -> 19 base checks
+        self.assertEqual(len(checks), 19)
         self.assertNotIn("H2H", checks)
         with_h2h = run_checks(home, home, market="over", home_name="A", away_name="B")
-        self.assertEqual(len(with_h2h), 23)
+        self.assertEqual(len(with_h2h), 20)
         self.assertIn("H2H", with_h2h)
         self.assertTrue(checks["H1"] and checks["H3"] and checks["H6"] and checks["H7"])
         weak = [M("A", 0, 1), M("A", 1, 0), M("A", 0, 0), M("H", 0, 0),
@@ -271,10 +282,11 @@ class TestRulesVenueOverall(unittest.TestCase):
                    M("A", 2, 2), M("A", 3, 1)]   # leaks away and overall
         tight = [M("H", 1, 0), M("H", 2, 0), M("H", 3, 0), M("A", 0, 0),
                  M("H", 1, 0), M("A", 0, 0)]     # clean sheets everywhere
-        c_leaky = run_checks(leaky_h, leaky_a)
+        c_leaky = run_checks(leaky_h, leaky_a, market="btts",
+                             home_name="A", away_name="B")
         c_tight = run_checks(tight, tight)
-        self.assertTrue(c_leaky["H8"] and c_leaky["H9"] and c_leaky["H10"])
-        self.assertTrue(c_leaky["A9"] and c_leaky["A10"] and c_leaky["A11"])
+        self.assertTrue(c_leaky["H8"] and c_leaky["H12"] and c_leaky["H10"])
+        self.assertTrue(c_leaky["A9"] and c_leaky["A12"] and c_leaky["A11"])
         self.assertFalse(c_tight["H8"] or c_tight["H10"] or c_tight["A9"] or c_tight["A11"])
 
     def test_h2h_check(self):
@@ -319,7 +331,7 @@ class TestFourOfSixAndNegativeMarkets(unittest.TestCase):
         regular = [M("H", 2, 1), M("A", 1, 0), M("H", 0, 1), M("A", 2, 2),
                    M("H", 1, 1), M("A", 1, 0)]   # scored 5/6, conceded 4/6
         c = run_checks(regular, regular, market="btts", home_name="A", away_name="B")
-        self.assertTrue(c["H11"])   # scored 4+/6
+        self.assertTrue(c["H7"])    # scored 4+/6 overall
         self.assertTrue(c["H12"])   # concedes 4+/6
         self.assertTrue(c["A13"])
         self.assertTrue(c["A12"])
@@ -362,6 +374,24 @@ class TestFourOfSixAndNegativeMarkets(unittest.TestCase):
         self.assertEqual(n, 2)
         s = hist.stats()
         self.assertEqual(list(s["overall"].values())[0]["w"], 2)
+
+
+class TestHomeStabilityChecks(unittest.TestCase):
+    def test_unbeaten_winless(self):
+        # home team: never loses (W/D only); away team: never wins (L/D only)
+        strong_h = [M("H", 2, 1), M("H", 1, 1), M("H", 3, 0), M("A", 0, 0),
+                    M("H", 2, 2), M("A", 1, 0)]   # unbeaten in all 6
+        weak_a   = [M("A", 0, 1), M("A", 1, 1), M("A", 0, 2), M("H", 0, 0),
+                    M("A", 1, 2), M("H", 0, 1)]   # winless in all 6
+        c = run_checks(strong_h, weak_a, market="home", home_name="A", away_name="B")
+        self.assertTrue(c["H14"] and c["H15"] and c["A14"] and c["A15"])
+        # losing home team / winning away team must fail them
+        shaky_h = [M("H", 0, 1), M("H", 0, 2), M("H", 1, 0), M("A", 0, 1),
+                   M("H", 0, 1), M("A", 0, 0)]   # loses most games
+        hot_a   = [M("A", 2, 0), M("A", 3, 1), M("A", 1, 0), M("H", 1, 0),
+                   M("A", 2, 1), M("H", 0, 0)]   # wins most games
+        c2 = run_checks(shaky_h, hot_a, market="home", home_name="A", away_name="B")
+        self.assertFalse(c2["H14"] or c2["A14"])
 
 
 class TestSoccerbaseParser(unittest.TestCase):
@@ -495,6 +525,45 @@ class TestTeamStats(unittest.TestCase):
         self.assertIn("home_concede", p)
         self.assertIn("away_concede", p)
         self.assertGreaterEqual(p["home_concede"], 0)
+
+
+class TestRetag(unittest.TestCase):
+    def test_retag_fixes_pending_only(self):
+        import tempfile, importlib
+        d = tempfile.mkdtemp(prefix="ou_retag_")
+        os.environ["OU_DATA_DIR"] = d
+        import overunder.config as cfg
+        importlib.reload(cfg)
+        importlib.reload(hist)
+        prov = DemoProvider()
+        fx = prov.fixtures()[0]          # St Gallen vs FC Sion (over25=74 on card)
+        p = build_pick(fx, prov, market="over")
+        p["statarea_signal"] = "DIVERGE"     # simulate broken-tag era record
+        p["statarea"] = {"over25": 17}
+        hist.record_picks([p])
+        from overunder.cli import cmd_retag
+        class A: date = None; card = os.path.join(os.path.dirname(
+            os.path.dirname(os.path.abspath(__file__))),
+            "overunder", "sample_data", "sample_card_2026-09-12.md")
+        cmd_retag(A())
+        h = hist._load()
+        self.assertEqual(h["pending"][0]["statarea_signal"], "AGREE_OVER")
+        self.assertEqual(h["pending"][0]["statarea"]["over25"], 74)
+
+
+class TestFreshFetch(unittest.TestCase):
+    def test_results_passes_fresh_flag(self):
+        from overunder.providers import SoccerbaseProvider
+        prov = SoccerbaseProvider.__new__(SoccerbaseProvider)
+        prov.fresh = True
+        calls = {}
+        def fake_get(url, cache_name, fresh=False):
+            calls["fresh"] = fresh
+            return "<html></html>"     # no rows -> results []
+        prov._get = fake_get
+        prov._parse_rows = lambda html: []
+        self.assertEqual(prov.results("2026-09-14"), [])
+        self.assertTrue(calls["fresh"])
 
 
 class TestDotenv(unittest.TestCase):

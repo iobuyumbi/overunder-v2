@@ -26,6 +26,29 @@ _load_dotenv()
 
 # --- model thresholds -------------------------------------------------------
 O25_MIN_CONFIDENCE = float(os.getenv("O25_MIN_CONFIDENCE", "0.55"))
+
+
+def _parse_market_min_conf():
+    """Per-market confidence gates. Defaults come from the 47-day tier analysis:
+       over 76.7% @0.85+, btts ~67% @0.75+, home ~63% @0.75+ (monotonic),
+       team-to-score only clear real-odds breakeven at the top tiers,
+       under/no_btts showed no edge -> 0.99 effectively disables them as singles.
+    Override with env, e.g. MARKET_MIN_CONF="over:0.80,under:0.90" """
+    defaults = {"over": 0.85, "btts": 0.75, "home": 0.75,
+                "home_sc": 0.85, "away_sc": 0.80,
+                "under": 0.99, "no_btts": 0.99}
+    raw = os.getenv("MARKET_MIN_CONF", "")
+    for pair in raw.split(","):
+        if ":" in pair:
+            k, _, v = pair.partition(":")
+            try:
+                defaults[k.strip()] = float(v)
+            except ValueError:
+                pass
+    return defaults
+
+
+MARKET_MIN_CONF = _parse_market_min_conf()
 PREMIUM_TIER = float(os.getenv("PREMIUM_TIER", "0.85"))   # >= -> 🔥 Premium
 DEFAULT_ODDS = float(os.getenv("DEFAULT_ODDS", "2.0"))    # decimal odds for EV
 KELLY_FRACTION = float(os.getenv("KELLY_FRACTION", "0.35"))

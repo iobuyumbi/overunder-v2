@@ -3,8 +3,8 @@
 Markets: 'over' (Over 2.5), 'btts' (both teams to score), 'home' (home win).
 One engine, one report, one settlement path -- not three separate scripts."""
 
-from .config import (DEFAULT_ODDS, KELLY_FRACTION, MAX_STAKE_PCT, O25_MIN_CONFIDENCE,
-                     PREMIUM_TIER)
+from .config import (DEFAULT_ODDS, KELLY_FRACTION, MARKET_MIN_CONF, MAX_STAKE_PCT,
+                     O25_MIN_CONFIDENCE, PREMIUM_TIER)
 from .rules import CHECK_NAMES, lambdas, market_probs, xg_forecast
 
 MARKET_LABEL = {"over": "Over 2.5", "under": "Under 2.5", "btts": "BTTS",
@@ -16,13 +16,14 @@ CORE_CHECKS = {
     "over":    ["H1", "H2", "H3", "A1", "A2", "A3", "A4", "A5", "H10", "A11", "H2H"],
     "under":   ["H1u", "H2u", "H3u", "A1u", "A2u", "A3u", "A4u", "A5u",
                 "H10u", "A11u", "H2H"],
-    "btts":    ["H4", "H5", "H6", "A3", "A6", "A7", "A8", "H8", "H9", "A9", "A10",
-                "H11", "A12", "A13", "H12", "H2H"],
+    "btts":    ["H4", "H5", "H6", "H7", "A3", "A6", "A7", "A13", "H8", "H12",
+                "A9", "A12", "H2H"],
     "no_btts": ["H4n", "H5n", "H6n", "H8n", "H9n", "A3n", "A6n", "A7n", "A8n",
                 "A9n", "A10n", "H2H"],
-    "home":    ["H1", "H3", "H6", "H7", "S6", "A9", "A10", "H2H"],
-    "home_sc": ["H1", "H6", "H7", "S6", "A9", "H11", "A12", "H2H"],
-    "away_sc": ["A1", "A3", "A8", "S6", "H8", "A13", "H12", "H2H"],
+    "home":    ["H1", "H3", "H6", "H7", "S6", "A9", "A12",
+                "H14", "H15", "A14", "A15", "H2H"],
+    "home_sc": ["H1", "H6", "H7", "S6", "A9", "A12", "H2H"],
+    "away_sc": ["A1", "A3", "A13", "S6", "H8", "H12", "H2H"],
 }
 
 
@@ -73,7 +74,10 @@ def build_pick(fixture, provider, market="over", odds=DEFAULT_ODDS, before=None)
 
 
 def predict_day(provider, day=None, markets=("over",), odds=DEFAULT_ODDS,
-                min_conf=O25_MIN_CONFIDENCE):
+                min_conf=O25_MIN_CONFIDENCE, market_min_conf=None):
+    """market_min_conf: per-market gates; defaults to config.MARKET_MIN_CONF.
+    Pass an empty dict to use the flat min_conf only (backtests, demos)."""
+    mmc = MARKET_MIN_CONF if market_min_conf is None else market_min_conf
     picks = []
     for fx in provider.fixtures(day):
         for mkt in markets:
@@ -81,7 +85,8 @@ def predict_day(provider, day=None, markets=("over",), odds=DEFAULT_ODDS,
                 p = build_pick(fx, provider, market=mkt, odds=odds)
             except Exception:
                 continue
-            if p["confidence"] >= min_conf:
+            thr = mmc.get(mkt) or min_conf
+            if p["confidence"] >= thr:
                 picks.append(p)
     # number within each market, ordered by confidence
     for mkt in markets:

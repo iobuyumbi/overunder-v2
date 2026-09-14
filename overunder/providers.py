@@ -42,14 +42,19 @@ def save_history_db(db):
         json.dump(db, f)
 
 
-def db_add_match(db, team, venue, gf, ga, date):
-    """Append one match to a team's history; returns True if actually added."""
+def db_add_match(db, team, venue, gf, ga, date, opp=""):
+    """Append one match to a team's history; returns True if actually added.
+    Dedupes on (date, venue, gf, ga) so re-backfilling after adding the opp
+    field does not duplicate old records."""
     k = normalize(team)
-    rec = {"venue": venue, "gf": int(gf), "ga": int(ga), "date": date}
+    key = (date, venue, int(gf), int(ga))
     lst = db.setdefault(k, [])
-    if rec in lst:
-        return False
-    lst.append(rec)
+    for e in lst:
+        if (e.get("date"), e["venue"], e["gf"], e["ga"]) == key:
+            if opp and not e.get("opp"):
+                e["opp"] = opp
+            return False
+    lst.append({"venue": venue, "gf": int(gf), "ga": int(ga), "date": date, "opp": opp})
     return True
 
 
@@ -197,10 +202,14 @@ class SoccerbaseProvider:
                 self._ids = json.load(f)
 
     # -- fetch plumbing ------------------------------------------------------
-    def _get(self, url, cache_name):
+    def _get(self, url, cache_name, fresh=False):
+        """fresh=True bypasses the read cache (settlement/verify need live
+        scores; backfill/backtest want the cache). Responses are still
+        written to cache for other callers."""
         import sys as _sys
         path = os.path.join(CACHE_DIR, cache_name)
-        cached = os.path.exists(path) and time.time() - os.path.getmtime(path) < 6 * 3600
+        cached = (not fresh) and os.path.exists(path) \
+                 and time.time() - os.path.getmtime(path) < 6 * 3600
         if not cached:
             print(f"[soccerbase] fetching {url}", file=_sys.stderr, flush=True)
         if os.path.exists(path) and time.time() - os.path.getmtime(path) < 6 * 3600:
@@ -346,23 +355,23 @@ class SoccerbaseProvider:
         for r in rows:
             venue = "H" if normalize(r["home"]) == normalize(team) else "A"
             gf, ga = (r["hg"], r["ag"]) if venue == "H" else (r["ag"], r["hg"])
-            out.append({"venue": venue, "gf": gf, "ga": ga, "date": r["date"] or ""})
+            out.append({"venue": venue, "gf": gf, "ga": ga, "date": r["date"] or "",
+                        "opp": r["away"] if venue == "H" else r["home"]})
         self._team_cache = getattr(self, "_team_cache", {})
         merged = merge_history(out, team, before=before)
         return merged[-limit:]
 
     def day_rows(self, day):
         """All parsed rows for one day page: played matches carry hg/ag,
-        upcoming fixtures have hg=None. Used by backtest."""
+        upcoming fixtures have hg=None. Used by backtest and settlement.
+        Honors self.fresh (set by settle/verify for live scores)."""
         html = self._get(f"{self.BASE}/matches/results.sd?date={day}",
-                         f"sb_date_{day}.html")
+                         f"sb_date_{day}.html",
+                         fresh=getattr(self, "fresh", False))
         return self._parse_rows(html)
 
     def results(self, day=None):
-        day = day or time.strftime("%Y-%m-%d")
-        html = self._get(f"{self.BASE}/matches/results.sd?date={day}",
-                         f"sb_date_{day}.html")
-        rows = self._parse_rows(html)
+        rows = self.day_rows(day or time.strftime("%Y-%m-%d"))
         return [{"home": r["home"], "away": r["away"],
                  "hg": r["hg"], "ag": r["ag"]}
                 for r in rows if r["hg"] is not None]
