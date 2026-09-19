@@ -43,14 +43,14 @@ class TestRules(unittest.TestCase):
         away = [M("A", 3, 1), M("A", 2, 2), M("A", 3, 1), M("H", 2, 1),
                 M("A", 2, 1), M("H", 1, 1)]
         checks = run_checks(home, away)
-        core = [checks[k] for k in ("H1", "H2", "A1", "A2", "A3", "A4")]
+        core = [checks[k] for k in ("H1", "A1", "A3", "A4")]
         self.assertTrue(all(core))
 
     def test_all_fail(self):
         dead = [M("H", 0, 0), M("A", 0, 0), M("H", 0, 1), M("A", 1, 0),
                 M("H", 0, 0), M("A", 0, 0)]
         checks = run_checks(dead, dead)
-        self.assertFalse(any(checks[k] for k in ("H1", "H2", "A1", "A2", "A3", "A4")))
+        self.assertFalse(any(checks[k] for k in ("H1", "A1", "A3", "A4")))
 
     def test_poisson_range(self):
         strong = [M("H", 3, 1)] * 6
@@ -263,11 +263,11 @@ class TestRulesVenueOverall(unittest.TestCase):
     def test_check_counts(self):
         home = [M("H", 3, 1), M("H", 2, 2), M("H", 3, 0), M("A", 1, 1),
                 M("H", 2, 1), M("A", 2, 2)]
-        checks = run_checks(home, home)          # no market -> 19 base checks
-        self.assertEqual(len(checks), 19)
+        checks = run_checks(home, home)          # no market -> 18 base checks
+        self.assertEqual(len(checks), 18)
         self.assertNotIn("H2H", checks)
         with_h2h = run_checks(home, home, market="over", home_name="A", away_name="B")
-        self.assertEqual(len(with_h2h), 20)
+        self.assertEqual(len(with_h2h), 19)
         self.assertIn("H2H", with_h2h)
         self.assertTrue(checks["H1"] and checks["H3"] and checks["H6"] and checks["H7"])
         weak = [M("A", 0, 1), M("A", 1, 0), M("A", 0, 0), M("H", 0, 0),
@@ -285,8 +285,9 @@ class TestRulesVenueOverall(unittest.TestCase):
         c_leaky = run_checks(leaky_h, leaky_a, market="btts",
                              home_name="A", away_name="B")
         c_tight = run_checks(tight, tight)
-        self.assertTrue(c_leaky["H8"] and c_leaky["H12"] and c_leaky["H10"])
-        self.assertTrue(c_leaky["A9"] and c_leaky["A12"] and c_leaky["A11"])
+        self.assertTrue(c_leaky["H8"])          # home concedes 4+/6 home
+        self.assertTrue(c_leaky["A9"])          # away concedes 4+/6 away
+        self.assertFalse(c_tight["H8"] or c_tight["H10"] or c_tight["A9"] or c_tight["A11"])
         self.assertFalse(c_tight["H8"] or c_tight["H10"] or c_tight["A9"] or c_tight["A11"])
 
     def test_h2h_check(self):
@@ -332,15 +333,15 @@ class TestFourOfSixAndNegativeMarkets(unittest.TestCase):
                    M("H", 1, 1), M("A", 1, 0)]   # scored 5/6, conceded 4/6
         c = run_checks(regular, regular, market="btts", home_name="A", away_name="B")
         self.assertTrue(c["H7"])    # scored 4+/6 overall
-        self.assertTrue(c["H12"])   # concedes 4+/6
+        self.assertTrue(c["A8"])    # scored 4+/6 overall (away side)
         self.assertTrue(c["A13"])
-        self.assertTrue(c["A12"])
+        self.assertFalse(c["HB"])   # 2 BTTS games in 3 home -> below 3+ bar
 
     def test_under_market_checks(self):
         weak = [M("H", 1, 0), M("H", 0, 1), M("H", 1, 0), M("A", 0, 0),
                 M("H", 0, 0), M("A", 1, 0)]      # low scoring, tight defence
         c = run_checks(weak, weak, market="under", home_name="A", away_name="B")
-        self.assertEqual(len(c), 12)             # 10 under + S6 + H2H
+        self.assertEqual(len(c), 11)             # 9 under + S6 + H2H
         self.assertTrue(c["H1u"] and c["H10u"] and c["A1u"] and c["A11u"])
         self.assertTrue(c["H2u"] and c["H3u"])
         strong = [M("H", 3, 1)] * 6
@@ -351,7 +352,7 @@ class TestFourOfSixAndNegativeMarkets(unittest.TestCase):
         blanky = [M("H", 1, 0), M("H", 0, 0), M("H", 2, 0), M("A", 0, 0),
                   M("H", 0, 0), M("A", 1, 0)]    # blanks a lot, keeps clean sheets
         c = run_checks(blanky, blanky, market="no_btts", home_name="A", away_name="B")
-        self.assertEqual(len(c), 13)             # 11 no_btts + S6 + H2H
+        self.assertEqual(len(c), 14)             # 11 no_btts + DOM + S6 + H2H
         self.assertTrue(c["H6n"] and c["H8n"] and c["H9n"])
         self.assertTrue(c["H4n"] and c["A6n"])   # almost no BTTS in its games
         # market_probs exposes both directions
@@ -384,14 +385,14 @@ class TestHomeStabilityChecks(unittest.TestCase):
         weak_a   = [M("A", 0, 1), M("A", 1, 1), M("A", 0, 2), M("H", 0, 0),
                     M("A", 1, 2), M("H", 0, 1)]   # winless in all 6
         c = run_checks(strong_h, weak_a, market="home", home_name="A", away_name="B")
-        self.assertTrue(c["H14"] and c["H15"] and c["A14"] and c["A15"])
+        self.assertTrue(c["H14"] and c["H15"] and c["A16"])
         # losing home team / winning away team must fail them
         shaky_h = [M("H", 0, 1), M("H", 0, 2), M("H", 1, 0), M("A", 0, 1),
                    M("H", 0, 1), M("A", 0, 0)]   # loses most games
         hot_a   = [M("A", 2, 0), M("A", 3, 1), M("A", 1, 0), M("H", 1, 0),
                    M("A", 2, 1), M("H", 0, 0)]   # wins most games
         c2 = run_checks(shaky_h, hot_a, market="home", home_name="A", away_name="B")
-        self.assertFalse(c2["H14"] or c2["A14"])
+        self.assertFalse(c2["H14"] or c2["A16"])
 
 
 class TestSaferMarkets(unittest.TestCase):
@@ -621,6 +622,44 @@ class TestFreshFetch(unittest.TestCase):
         self.assertNotIn("url", seen)           # served from cache, no fetch
 
 
+class TestSettleDiagnostics(unittest.TestCase):
+    def test_classify_pending(self):
+        from overunder.cli import _classify_pending
+        rows = [{"home": "Leeds", "away": "Newcastle", "hg": 4, "ag": 1},
+                {"home": "Inter", "away": "Udinese", "hg": None, "ag": None}]
+        # note: only STILL-PENDING recs reach the classifier (settled ones
+        # were already removed), so scored fixtures never appear here
+        recs = [{"home": "Inter", "away": "Udinese"},        # on page, no score yet
+                {"home": "Riestra", "away": "Lanus"}]        # not on page at all
+        awaiting, uncovered = _classify_pending(recs, rows)
+        self.assertEqual([r["home"] for r in awaiting], ["Inter"])
+        self.assertEqual([r["home"] for r in uncovered], ["Riestra"])
+
+
+class TestVoidStale(unittest.TestCase):
+    def test_void_closes_old_pending(self):
+        import tempfile, importlib
+        from datetime import date, timedelta
+        os.environ["OU_DATA_DIR"] = tempfile.mkdtemp(prefix="ou_void_")
+        import overunder.config as cfg
+        importlib.reload(cfg)
+        importlib.reload(hist)
+        prov = DemoProvider()
+        fx = prov.fixtures()[0]
+        old_pick = build_pick(fx, prov)
+        old_pick["date"] = (date.today() - timedelta(days=2)).isoformat()
+        fresh_pick = build_pick(prov.fixtures()[1], prov)
+        fresh_pick["date"] = date.today().isoformat()   # demo fixtures are dated
+        hist.record_picks([old_pick, fresh_pick])
+        n = hist.void_stale(days=1)
+        self.assertEqual(n, 1)
+        s = hist.stats()
+        self.assertEqual(s["pending"], 1)
+        settled = hist._load()["settled"]
+        self.assertEqual(settled[-1]["result"], "P")
+        self.assertEqual(settled[-1]["profit"], 0.0)
+
+
 class TestDotenv(unittest.TestCase):
     def test_env_file_loads(self):
         import tempfile
@@ -629,6 +668,7 @@ class TestDotenv(unittest.TestCase):
         with open(os.path.join(d, ".env"), "w") as f:
             f.write("OU_CACHE_DIR=/tmp/ou_env_test\n")
         old = os.getcwd()
+        old_cache = os.environ.pop("OU_CACHE_DIR", None)   # real .env may set it
         os.chdir(d)
         try:
             _load_dotenv()
@@ -636,6 +676,8 @@ class TestDotenv(unittest.TestCase):
         finally:
             os.chdir(old)
             os.environ.pop("OU_CACHE_DIR", None)
+            if old_cache is not None:
+                os.environ["OU_CACHE_DIR"] = old_cache
 
 
 if __name__ == "__main__":

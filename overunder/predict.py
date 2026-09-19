@@ -13,24 +13,25 @@ MARKET_LABEL = {"over": "Over 2.5", "under": "Under 2.5", "btts": "BTTS",
                 "over15": "Over 1.5", "under35": "Under 3.5",
                 "home_dw": "Home or draw"}
 
-# which of the 13 checks count as 'core' per market (for the missed-list flavor)
+# which checks count as 'core' per market (for the missed-list flavor).
+# Every key here MUST exist in that market's check dict in rules.run_checks.
 CORE_CHECKS = {
-    "over":    ["H1", "H2", "H3", "A1", "A2", "A3", "A4", "A5", "H10", "A11", "H2H"],
-    "under":   ["H1u", "H2u", "H3u", "A1u", "A2u", "A3u", "A4u", "A5u",
+    "over":    ["H1", "H2", "H3", "A1", "A3", "A4", "A5", "H10", "A11", "H2H"],
+    "under":   ["H1u", "H2u", "H3u", "A1u", "A3u", "A4u", "A5u",
                 "H10u", "A11u", "H2H"],
-    "btts":    ["H4", "H5", "H6", "H7", "A3", "A6", "A7", "A13", "H8", "H12",
-                "A9", "A12", "H2H"],
+    "btts":    ["H4", "H5", "H6", "H7", "HB", "AB", "A3", "A6", "A7", "A8",
+                "A13", "H2H"],
     "no_btts": ["H4n", "H5n", "H6n", "H8n", "H9n", "A3n", "A6n", "A7n", "A8n",
-                "A9n", "A10n", "H2H"],
-    "home":    ["H1", "H3", "H6", "H7", "S6", "A9", "A12",
-                "H14", "H15", "A14", "A15", "H2H"],
-    "home_sc": ["H1", "H6", "H7", "S6", "A9", "A12", "H2H"],
-    "away_sc": ["A1", "A3", "A13", "S6", "H8", "H12", "H2H"],
+                "A9n", "A10n", "DOM", "H2H"],
+    "home":    ["H1", "H6", "H7", "H17", "H16",
+                "A9", "A12", "A16", "H14", "H15", "H2H"],
+    "home_sc": ["H1", "H6", "H7", "S6", "A9", "A11", "A12", "H2H"],
+    "away_sc": ["A1", "A3", "A13", "S6", "H8", "H10", "H12", "H2H"],
     # safer lines inherit their parent market's evidence
-    "over15":  ["H1", "H2", "H3", "A1", "A2", "A3", "A4", "A5", "H10", "A11", "H2H"],
-    "under35": ["H1u", "H2u", "H3u", "A1u", "A2u", "A3u", "A4u", "A5u",
+    "over15":  ["H1", "H2", "H3", "A1", "A3", "A4", "A5", "A8", "H10", "A11", "H2H"],
+    "under35": ["H1u", "H2u", "H3u", "A1u", "A3u", "A4u", "A5u",
                 "H10u", "A11u", "H2H"],
-    "home_dw": ["H1", "H3", "H6", "H7", "S6", "A9", "A12",
+    "home_dw": ["H1", "H6", "H7", "H17", "A9", "A12", "A17", "A18",
                 "H14", "H15", "A14", "A15", "H2H"],
 }
 

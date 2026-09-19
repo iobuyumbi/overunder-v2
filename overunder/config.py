@@ -34,7 +34,7 @@ def _parse_market_min_conf():
        team-to-score only clear real-odds breakeven at the top tiers,
        under/no_btts showed no edge -> 0.99 effectively disables them as singles.
     Override with env, e.g. MARKET_MIN_CONF="over:0.80,under:0.90" """
-    defaults = {"over": 0.85, "btts": 0.75, "home": 0.75,
+    defaults = {"over": 0.85, "btts": 0.75, "home": 0.85,
                 "home_sc": 0.85, "away_sc": 0.80,
                 "under": 0.99, "no_btts": 0.99,
                 # safer lines: high floors, real breakevens are ~75-83%

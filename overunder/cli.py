@@ -54,7 +54,12 @@ def _maybe_tag_statarea(picks, args):
             print(f"[statarea] only {len(games)} games parsed -- skipping tags",
                   file=sys.stderr)
             return picks
-        return st.cross_check(picks, games)
+        tagged = st.cross_check(picks, games)
+        # home win: a statarea divergence is a red flag, not a footnote --
+        # an AGREE_HOME tag or no card at all still ships, DIVERGE does not
+        return [p for p in tagged
+                if not (p.get("market") == "home"
+                        and p.get("statarea_signal") == "DIVERGE")]
     except Exception as e:
         print(f"[statarea] unavailable ({e}) -- continuing without tags",
               file=sys.stderr)
@@ -143,14 +148,56 @@ def cmd_compare(args):
                                     if r["statarea_signal"] == "NOT_FOUND"))
 
 
+def _classify_pending(recs, rows):
+    """Why are these picks still pending? Split into 'awaiting' (fixture is on
+    the day page but has no score yet) and 'uncovered' (neither team appears
+    on the page at all -> source doesn't list this league/fixture)."""
+    from .teams import normalize as _n
+    page_teams = set()
+    for r in rows:
+        page_teams.add(_n(r["home"]))
+        page_teams.add(_n(r["away"]))
+    awaiting, uncovered = [], []
+    for rec in recs:
+        if _n(rec["home"]) in page_teams or _n(rec["away"]) in page_teams:
+            awaiting.append(rec)
+        else:
+            uncovered.append(rec)
+    return awaiting, uncovered
+
+
+def _settle_day(prov, d, verbose=True):
+    """Settle one date and report what is left and WHY."""
+    try:
+        rows = prov.day_rows(d)
+    except RuntimeError as e:
+        print(f"{d}: cannot fetch results ({e})", file=sys.stderr)
+        return 0
+    scored = [{"home": r["home"], "away": r["away"],
+               "hg": r["hg"], "ag": r["ag"]} for r in rows if r["hg"] is not None]
+    before = {x["id"] for x in hist._load()["pending"]}
+    n = hist.settle(scored)
+    left = [x for x in hist._load()["pending"] if x["date"] == d and x["id"] in before]
+    awaiting, uncovered = _classify_pending(left, rows)
+    if verbose:
+        msg = f"  {d}: settled {n}"
+        if awaiting:
+            msg += f" | {len(awaiting)} awaiting result (on page, no score yet)"
+        if uncovered:
+            names = "; ".join(f"{r['home']} vs {r['away']}" for r in uncovered[:5])
+            more = f" (+{len(uncovered)-5} more)" if len(uncovered) > 5 else ""
+            msg += f" | {len(uncovered)} not covered by soccerbase: {names}{more}"
+        print(msg)
+    return n
+
+
 def cmd_settle(args):
     prov = DemoProvider() if args.demo else _provider(False)
     prov.fresh = True   # settlement needs live scores, not the 6h cache
     if args.date:
-        n = hist.settle(prov.results(args.date))
+        n = _settle_day(prov, args.date)
         print(f"settled {n} picks for {args.date}")
         return
-    # auto: fetch each pending pick's own day page (cached) and settle what matches
     h = hist._load()
     dates = sorted({r["date"] for r in h["pending"]})
     if not dates:
@@ -158,14 +205,7 @@ def cmd_settle(args):
         return
     total = 0
     for d in dates:
-        try:
-            rows = prov.results(d)
-        except RuntimeError as e:
-            print(f"{d}: cannot fetch results ({e})", file=sys.stderr)
-            continue
-        n = hist.settle(rows)
-        total += n
-        print(f"  {d}: settled {n}")
+        total += _settle_day(prov, d)
     print(f"settled {total} picks across {len(dates)} day(s)")
 
 
@@ -338,6 +378,32 @@ def cmd_team_stats(args):
     if not matches:
         sys.exit(f"no matches found for '{args.team}'")
     print(render_team_stats(args.team, matches))
+
+
+def cmd_void(args):
+    """Void pending picks older than N days (no result from the source).
+    Sep 14 SA fixtures stuck 'awaiting' -> run:  python -m overunder void --days 1"""
+    n = hist.void_stale(args.days)
+    print(f"voided {n} stale pending picks (result P, 0 profit)")
+    if n:
+        print("run 'python -m overunder recent' to see them marked VOID")
+
+
+def cmd_pending(args):
+    """List pending picks grouped by status: awaiting vs not-covered."""
+    h = hist._load()
+    by_date = {}
+    for r in h["pending"]:
+        by_date.setdefault(r["date"], []).append(r)
+    if not by_date:
+        print("nothing pending")
+        return
+    from datetime import date as _date
+    for d in sorted(by_date):
+        age = (_date.today() - _date.fromisoformat(d)).days
+        print(f"{d} ({age}d old): {len(by_date[d])} picks -- "
+              + "; ".join(f"{r['home']} vs {r['away']} [{r.get('market')}]"
+                          for r in by_date[d][:6]))
 
 
 def cmd_recent(args):
@@ -570,6 +636,10 @@ def main(argv=None):
     p.set_defaults(fn=cmd_team_stats)
     p = sub.add_parser("recent"); p.add_argument("--n", type=int, default=25)
     p.set_defaults(fn=cmd_recent)
+    p = sub.add_parser("pending")
+    p.set_defaults(fn=cmd_pending)
+    p = sub.add_parser("void"); p.add_argument("--days", type=int, default=1)
+    p.set_defaults(fn=cmd_void)
     p = sub.add_parser("retag"); p.add_argument("--date", default=None)
     p.add_argument("--card", default=None)
     p.set_defaults(fn=cmd_retag)

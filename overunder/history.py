@@ -138,6 +138,30 @@ def stats():
     return out
 
 
+def void_stale(days=1):
+    """Close pending picks whose match date is more than `days` old with no
+    result -- voided (result 'P', zero profit, score 'VOID'). Covers fixtures
+    the source never scores (some SA leagues) and abandoned/postponed games.
+    Returns the number voided."""
+    from datetime import date, timedelta
+    cutoff = (date.today() - timedelta(days=days)).isoformat()
+    h = _load()
+    kept, voided = [], 0
+    for rec in h["pending"]:
+        if rec["date"] <= cutoff:
+            rec["result"] = "P"
+            rec["profit"] = 0.0
+            rec["score"] = "VOID"
+            rec["void_reason"] = "no result from source after deadline"
+            h["settled"].append(rec)
+            voided += 1
+        else:
+            kept.append(rec)
+    h["pending"] = kept
+    _save(h)
+    return voided
+
+
 def yesterday_record(day_before=None):
     """'7W-2L-0P' style record for the report header."""
     import datetime

@@ -1,18 +1,22 @@
 """Rules engine.
 
-POSITIVE markets (over, btts, home, home_sc, away_sc):
-  22 base checks + H2H, plus the 4/6-overall checks for btts/home_sc/away_sc.
-  Weak/strong volume rules carry an early-season rate fallback.
+POSITIVE markets -- each market gets its OWN evidence set:
+  over    -- attacking volume + over pattern + leaky defences (17 base + H2H)
+  over15  -- over's set + A8 (neither side blanks regularly)
+  btts    -- mutual-scoring set: BTTS rates + both-sides-score games (HB/AB)
+  home    -- home dominance (H16 wins 3+/6) + acceptable-form rule
+             (H14/H15: 4 wins in 6 OR unbeaten 5/6) + home solidity (H17)
+             + away no-win (A16) + away leaks (A9/A11/A12)
+  home_sc -- home attack (H6/H7 tightened to 5/6) + away leakage
+  away_sc -- away attack/conceding (A3/A9 tightened to 5/6) + home leakage
+  home_dw -- home's set but draw-friendly: winless-away (A14/A15), weak
+             away attack (A17/A18)
 
-NEGATIVE markets (under, no_btts): their own mirrored check set -- a pick is
-NOT judged by the positive rules it deliberately defies:
-  under   -- weak attacks, solid defences, under rates, low-activity away side,
-             H2H predicate = match stayed under 2.5
-  no_btts -- at least one side blanks regularly / keeps clean sheets,
-             low BTTS rates, H2H predicate = at least one side failed to score
+NEGATIVE markets (under, no_btts): mirrored check set; no_btts has the
+dominance rule (DOM): one side keeps clean sheets OR the other blanks 50%+.
 
 H2H: expected result in >= half of last up-to-6 meetings; 1/1 counts;
-     zero meetings is a neutral pass. S7 (trend) removed.
+     zero meetings is a neutral pass.
 """
 
 import math
@@ -28,36 +32,38 @@ CHECK_NAMES = {
     "H6": "Home scored (4+/6 home)",
     "H7": "Home scored (4+/6 overall)",
     "H8": "Home conceded (4+/6 home)",
-    "H9": "Home conceded (L3 overall)",
     "H10": "Home conceded 7+ (L3 home)",
-    "H11": "Home scored (4+/6 overall)",
     "H12": "Home concedes (4+/6 overall)",
+    "H14": "Home form: 4W/6 or unbeaten 5/6 home",
+    "H15": "Home form: 4W/6 or unbeaten 5/6 overall",
+    "H16": "Home win (3+/6 home)",
+    "H17": "Home conceded <=2 (L3 home)",
     "A1": "Away goals L3 away (7+)",
-    "A2": "Away prev match 2+ goals",
     "A3": "Away scored (4+/6 away)",
     "A4": "Away over 2.5 (4+/6 away)",
     "A5": "Away over 2.5 (L6 overall)",
     "A6": "Away BTTS (L6 away)",
     "A7": "Away BTTS (L6 overall)",
-    "A8": "Away scored (L6 overall)",
+    "A8": "Away scored (4+/6 overall)",
     "A9": "Away conceded (4+/6 away)",
-    "A10": "Away conceded (L3 overall)",
     "A11": "Away conceded 7+ (L3 away)",
     "A12": "Away concedes (4+/6 overall)",
     "A13": "Away scored (4+/6 overall)",
-    "H14": "Home unbeaten (4+/6 home)",
-    "H15": "Home unbeaten (4+/6 overall)",
     "A14": "Away winless (4+/6 away)",
     "A15": "Away winless (4+/6 overall)",
+    "A16": "Away no win (4+/6 away)",
+    "A17": "Away scored <=4 (L3 away)",
+    "A18": "Away blanked (4+/6 away)",
     "S6": "Both teams active",
     "H2H": "Head-to-head pattern",
+    "HB": "Home BTTS game (3+/6 home)",
+    "AB": "Away BTTS game (3+/6 away)",
     # under 2.5 mirrors
     "H1u": "Home scored <=4 (L3 home)",
     "H2u": "Home under 2.5 (4+/6 home)",
     "H3u": "Home under 2.5 (L6 overall)",
     "H10u": "Home conceded <=2 (L3 home)",
     "A1u": "Away scored <=4 (L3 away)",
-    "A2u": "Away prev match <=1 goal",
     "A3u": "Away blanked (4+/6 away)",
     "A4u": "Away under 2.5 (4+/6 away)",
     "A5u": "Away under 2.5 (L6 overall)",
@@ -74,6 +80,7 @@ CHECK_NAMES = {
     "A8n": "Away blanked (4+/6 overall)",
     "A9n": "Away clean sheet (4+/6 away)",
     "A10n": "Away clean sheet (4+/6 overall)",
+    "DOM": "One side dominant (CS or blank 50%+)",
 }
 
 H2H_PRED = {
@@ -144,6 +151,47 @@ def _freq4(ms, fn):
     return False
 
 
+def _freq3(ms, fn):
+    """Halved frequency rule: outcome in 3+ of last 6 (or 2+ of last 3)."""
+    n = len(ms)
+    if n >= 6:
+        return sum(1 for m in ms[-6:] if fn(m)) >= 3
+    if n >= 3:
+        return sum(1 for m in ms[-3:] if fn(m)) >= 2
+    return False
+
+
+def _strong_unbeaten(ms):
+    """Acceptable home form: 4+ wins in 6 outright, OR unbeaten in 5 of 6
+    when wins come with draws (a draw-heavy host still qualifies)."""
+    if not ms:
+        return False
+    wins = _rate(ms, lambda m: m["gf"] > m["ga"])
+    unbeaten = _rate(ms, lambda m: m["gf"] >= m["ga"])
+    return wins >= 4 / 6 or unbeaten >= 5 / 6
+
+
+# Base checks that are irrelevant -- or actively harmful -- evidence for a
+# given positive market. They are computed for everyone else, then dropped
+# from these markets' sets (shrinking the confidence denominator on purpose:
+# confidence should reflect relevant evidence only).
+_EXCLUDE = {
+    # volume/over checks measure fireworks, not mutual scoring
+    "btts":    {"H1", "H2", "H3", "H10", "A1", "A4", "A5", "A11"},
+    # home win: drop BTTS, over, leaky-home and away-scoring support
+    "home":    {"H2", "H3", "H4", "H5", "H8", "H10", "A1", "A3",
+                "A4", "A5", "A6", "A7"},
+    "home_sc": {"H2", "H3", "H4", "H5", "H8", "H10", "A1", "A3",
+                "A4", "A5", "A6", "A7"},
+    # away_sc: away attack + home defensive leakage
+    "away_sc": {"H1", "H2", "H3", "H4", "H5", "H6", "H7",
+                "A4", "A5", "A6", "A7", "A9", "A11"},
+    # home_dw: same exclusions as home; draw-friendly extras added below
+    "home_dw": {"H2", "H3", "H4", "H5", "H8", "H10", "A1", "A3",
+                "A4", "A5", "A6", "A7"},
+}
+
+
 def _negative_checks(home_ms, away_ms, market, away_name):
     h3h = _last(home_ms, 3, "H")
     a3a = _last(away_ms, 3, "A")
@@ -151,8 +199,6 @@ def _negative_checks(home_ms, away_ms, market, away_name):
     a6 = _last(away_ms, 6)
     h6H = _last(home_ms, 6, "H")
     a6A = _last(away_ms, 6, "A")
-    h3 = _last(home_ms, 3)
-    a3 = _last(away_ms, 3)
     checks = {"S6": len(home_ms) >= 4 and len(away_ms) >= 4}
     if market == "under":
         under = lambda m: _tot(m) <= 2.5
@@ -162,7 +208,6 @@ def _negative_checks(home_ms, away_ms, market, away_name):
             "H3u": _rate(h6, under) >= 0.5,
             "H10u": _low_volume_check(h3h, "ga", 2, 0.7),  # solid home defence
             "A1u": _low_volume_check(a3a, "gf", 4, 1.0),
-            "A2u": (_tot(away_ms[-1]) <= 1) if away_ms else False,
             "A3u": _freq4(a6A, lambda m: m["gf"] == 0),
             "A4u": _freq4(a6A, under),
             "A5u": _rate(a6, under) >= 0.5,
@@ -182,13 +227,16 @@ def _negative_checks(home_ms, away_ms, market, away_name):
             "A8n": _freq4(a6, lambda m: m["gf"] == 0),
             "A9n": _freq4(a6A, lambda m: m["ga"] == 0),
             "A10n": _freq4(a6, lambda m: m["ga"] == 0),
+            # what no_btts really is: one side dominates the scoring exchange
+            "DOM": (_rate(h6, lambda m: m["ga"] == 0) >= 0.5 or
+                    _rate(a6, lambda m: m["gf"] == 0) >= 0.5),
         })
     checks["H2H"] = h2h_check(home_ms, market, away_name)
     return checks
 
 
 def run_checks(home_ms, away_ms, market=None, home_name="", away_name=""):
-    # under35 shares under's mirrored set; home_dw shares home's extras
+    # under35 shares under's mirrored set
     if market in ("under", "no_btts", "under35"):
         neg = "under" if market == "under35" else market
         return _negative_checks(home_ms, away_ms, neg, away_name)
@@ -199,8 +247,6 @@ def run_checks(home_ms, away_ms, market=None, home_name="", away_name=""):
     a6 = _last(away_ms, 6)
     h6H = _last(home_ms, 6, "H")
     a6A = _last(away_ms, 6, "A")
-    h3 = _last(home_ms, 3)
-    a3 = _last(away_ms, 3)
     over = lambda m: _tot(m) > 2.5
     btts = lambda m: m["gf"] > 0 and m["ga"] > 0
 
@@ -215,7 +261,6 @@ def run_checks(home_ms, away_ms, market=None, home_name="", away_name=""):
         "H8": _freq4(h6H, lambda m: m["ga"] > 0),
         "H10": _volume_check(h3h, "ga"),
         "A1": _volume_check(a3a, "gf"),
-        "A2": (_tot(away_ms[-1]) >= 2) if away_ms else False,
         "A3": _freq4(a6A, lambda m: m["gf"] > 0),
         "A4": _freq4(a6A, over),
         "A5": _rate(a6, over) >= 0.5,
@@ -225,17 +270,56 @@ def run_checks(home_ms, away_ms, market=None, home_name="", away_name=""):
         "A11": _volume_check(a3a, "ga"),
         "S6": len(home_ms) >= 4 and len(away_ms) >= 4,
     }
-    if market in ("btts", "home", "home_sc", "away_sc", "home_dw"):
-        # overall 4/6 reliability rules (the doubled forms of the old 2/3 rules)
+    # drop base checks that don't count as evidence for this market
+    if market in _EXCLUDE:
+        for k in _EXCLUDE[market]:
+            checks.pop(k, None)
+
+    if market == "btts":
+        # mutual scoring: both sides score AND concede in the same games
+        checks.update({
+            "A8": _freq4(a6, lambda m: m["gf"] > 0),
+            "A13": sum(1 for m in a6 if m["gf"] > 0) >= 4,
+            "HB": sum(1 for m in h6H if m["gf"] > 0 and m["ga"] > 0) >= 3,
+            "AB": sum(1 for m in a6A if m["gf"] > 0 and m["ga"] > 0) >= 3,
+        })
+    elif market == "home":
+        # dominance + acceptable form + solidity at home, away no-win + leaks
+        checks.update({
+            "A12": sum(1 for m in a6 if m["ga"] > 0) >= 4,
+            "H14": _strong_unbeaten(h6H),
+            "H15": _strong_unbeaten(h6),
+            "H16": _freq3(h6H, lambda m: m["gf"] > m["ga"]),   # wins 3+/6 home
+            "H17": _low_volume_check(h3h, "ga", 2, 0.7),       # solid home defence
+            "A16": _freq4(a6A, lambda m: m["gf"] <= m["ga"]),  # away loses OR draws away
+        })
+    elif market == "home_sc":
         checks["A12"] = sum(1 for m in a6 if m["ga"] > 0) >= 4
-        checks["A13"] = sum(1 for m in a6 if m["gf"] > 0) >= 4
-        checks["H12"] = sum(1 for m in h6 if m["ga"] > 0) >= 4
-    if market in ("home", "home_dw"):
-        # result-stability rules: the host doesn't lose, the visitor doesn't win
-        checks["H14"] = _freq4(h6H, lambda m: m["gf"] >= m["ga"])   # unbeaten at home
-        checks["H15"] = _freq4(h6, lambda m: m["gf"] >= m["ga"])    # unbeaten overall
-        checks["A14"] = _freq4(a6A, lambda m: m["gf"] <= m["ga"])   # winless away
-        checks["A15"] = _freq4(a6, lambda m: m["gf"] <= m["ga"])    # winless overall
+        # tightened: near-perfect scoring consistency required
+        checks["H6"] = _rate(h6H, lambda m: m["gf"] > 0) >= 5 / 6
+        checks["H7"] = _rate(h6, lambda m: m["gf"] > 0) >= 5 / 6
+    elif market == "away_sc":
+        # tightened away scoring; home leaks goals (H10 back via base)
+        checks.update({
+            "A3": _rate(a6A, lambda m: m["gf"] > 0) >= 5 / 6,
+            "A13": _rate(a6, lambda m: m["gf"] > 0) >= 5 / 6,
+            "H12": sum(1 for m in h6 if m["ga"] > 0) >= 4,
+        })
+    elif market == "over15":
+        # the only real enemy of a 1.5 line is a blanking side
+        checks["A8"] = _freq4(a6, lambda m: m["gf"] > 0)
+    elif market == "home_dw":
+        # home's evidence but draw-friendly: winless (not loss-heavy) away
+        checks.update({
+            "A12": sum(1 for m in a6 if m["ga"] > 0) >= 4,
+            "H14": _strong_unbeaten(h6H),
+            "H15": _strong_unbeaten(h6),
+            "H17": _low_volume_check(h3h, "ga", 2, 0.7),
+            "A14": _freq4(a6A, lambda m: m["gf"] <= m["ga"]),  # winless away
+            "A15": _freq4(a6, lambda m: m["gf"] <= m["ga"]),   # winless overall
+            "A17": _low_volume_check(a3a, "gf", 4, 1.0),
+            "A18": _freq4(a6A, lambda m: m["gf"] == 0),
+        })
     if market:
         checks["H2H"] = h2h_check(home_ms, market, away_name)
     return checks
