@@ -1,9 +1,15 @@
 """Rules engine.
 
 POSITIVE markets -- each market gets its OWN evidence set:
-  over    -- attacking volume + over pattern + leaky defences (17 base + H2H)
-  over15  -- over's set + A8 (neither side blanks regularly)
-  btts    -- mutual-scoring set: BTTS rates + both-sides-score games (HB/AB)
+  over    -- attack-vs-defence complementarity: home attack pairs with away
+             leakage (A9/A11), away attack pairs with home leakage (H8/H10),
+             plus volatile sides (HB/AB = score AND concede in the same
+             games) and the proven over patterns (H2/H3/A4/A5)
+  over15  -- inherits over's set
+  btts    -- union of the home_sc and away_sc profiles: BOTH sides must
+             score regularly (5/6 tightened: H6/H7/A3/A13) and BOTH
+             defences must leak (A9/A11/A12 for home to score,
+             H8/H10/H12 for away to score)
   home    -- home dominance (H16 wins 3+/6) + acceptable-form rule
              (H14/H15: 4 wins in 6 OR unbeaten 5/6) + home solidity (H17)
              + away no-win (A16) + away leaks (A9/A11/A12)
@@ -176,8 +182,11 @@ def _strong_unbeaten(ms):
 # from these markets' sets (shrinking the confidence denominator on purpose:
 # confidence should reflect relevant evidence only).
 _EXCLUDE = {
-    # volume/over checks measure fireworks, not mutual scoring
-    "btts":    {"H1", "H2", "H3", "H10", "A1", "A4", "A5", "A11"},
+    # over: keep attack<->concede pairs, patterns, BTTS rates; drop the rest
+    "over":    {"H4", "H7", "A6"},
+    "over15":  {"H4", "H7", "A6"},
+    # btts: union of home_sc + away_sc profiles; over patterns/BTTS rates out
+    "btts":    {"H2", "H3", "H4", "H5", "A4", "A5", "A6", "A7"},
     # home win: drop BTTS, over, leaky-home and away-scoring support
     "home":    {"H2", "H3", "H4", "H5", "H8", "H10", "A1", "A3",
                 "A4", "A5", "A6", "A7"},
@@ -275,13 +284,24 @@ def run_checks(home_ms, away_ms, market=None, home_name="", away_name=""):
         for k in _EXCLUDE[market]:
             checks.pop(k, None)
 
-    if market == "btts":
-        # mutual scoring: both sides score AND concede in the same games
+    if market in ("over", "over15"):
+        # attack-vs-defence complementarity + volatile sides; A8 completes
+        # the away-scoring picture for the away-attack vs home-defence pair
         checks.update({
             "A8": _freq4(a6, lambda m: m["gf"] > 0),
-            "A13": sum(1 for m in a6 if m["gf"] > 0) >= 4,
             "HB": sum(1 for m in h6H if m["gf"] > 0 and m["ga"] > 0) >= 3,
             "AB": sum(1 for m in a6A if m["gf"] > 0 and m["ga"] > 0) >= 3,
+        })
+    elif market == "btts":
+        # union of the home_sc and away_sc profiles: BOTH sides must score
+        # regularly (5/6 tightened) and BOTH defences must leak
+        checks.update({
+            "H6": _rate(h6H, lambda m: m["gf"] > 0) >= 5 / 6,
+            "H7": _rate(h6, lambda m: m["gf"] > 0) >= 5 / 6,
+            "A3": _rate(a6A, lambda m: m["gf"] > 0) >= 5 / 6,
+            "A13": _rate(a6, lambda m: m["gf"] > 0) >= 5 / 6,
+            "A12": sum(1 for m in a6 if m["ga"] > 0) >= 4,
+            "H12": sum(1 for m in h6 if m["ga"] > 0) >= 4,
         })
     elif market == "home":
         # dominance + acceptable form + solidity at home, away no-win + leaks
@@ -305,9 +325,6 @@ def run_checks(home_ms, away_ms, market=None, home_name="", away_name=""):
             "A13": _rate(a6, lambda m: m["gf"] > 0) >= 5 / 6,
             "H12": sum(1 for m in h6 if m["ga"] > 0) >= 4,
         })
-    elif market == "over15":
-        # the only real enemy of a 1.5 line is a blanking side
-        checks["A8"] = _freq4(a6, lambda m: m["gf"] > 0)
     elif market == "home_dw":
         # home's evidence but draw-friendly: winless (not loss-heavy) away
         checks.update({

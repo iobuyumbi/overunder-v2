@@ -16,11 +16,12 @@ MARKET_LABEL = {"over": "Over 2.5", "under": "Under 2.5", "btts": "BTTS",
 # which checks count as 'core' per market (for the missed-list flavor).
 # Every key here MUST exist in that market's check dict in rules.run_checks.
 CORE_CHECKS = {
-    "over":    ["H1", "H2", "H3", "A1", "A3", "A4", "A5", "H10", "A11", "H2H"],
+    "over":    ["H1", "A1", "H6", "A3", "A8", "A9", "H8", "A11", "H10",
+                "HB", "AB", "H2", "A4", "H2H"],
     "under":   ["H1u", "H2u", "H3u", "A1u", "A3u", "A4u", "A5u",
                 "H10u", "A11u", "H2H"],
-    "btts":    ["H4", "H5", "H6", "H7", "HB", "AB", "A3", "A6", "A7", "A8",
-                "A13", "H2H"],
+    "btts":    ["H1", "H6", "H7", "A9", "A11", "A12",
+                "A1", "A3", "A13", "H8", "H10", "H12", "H2H"],
     "no_btts": ["H4n", "H5n", "H6n", "H8n", "H9n", "A3n", "A6n", "A7n", "A8n",
                 "A9n", "A10n", "DOM", "H2H"],
     "home":    ["H1", "H6", "H7", "H17", "H16",
