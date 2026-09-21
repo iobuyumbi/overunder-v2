@@ -1,7 +1,13 @@
 """Build picks for any supported market from fixtures + team histories.
 
-Markets: 'over' (Over 2.5), 'btts' (both teams to score), 'home' (home win).
-One engine, one report, one settlement path -- not three separate scripts."""
+Markets (10 total): over (Over 2.5), over15 (Over 1.5), under (Under 2.5),
+under35 (Under 3.5), btts, no_btts, home, home_sc, away_sc, home_dw.
+
+Confidence is a blended score: 70% Poisson market-probability * 30% rule-check
+pass-ratio, clamped to <= 0.98.  The pure check_ratio (= passed / total) is
+also exposed for inspection.  Gates come from config.MARKET_MIN_CONF.
+
+One engine, one report, one settlement path."""
 
 from .config import (DEFAULT_ODDS, KELLY_FRACTION, MARKET_MIN_CONF, MAX_STAKE_PCT,
                      O25_MIN_CONFIDENCE, PREMIUM_TIER)
@@ -55,7 +61,11 @@ def build_pick(fixture, provider, market="over", odds=DEFAULT_ODDS, before=None)
         sel = [m for m in ms if venue is None or m["venue"] == venue]
         return round(sum(m[key] for m in sel) / len(sel), 2) if sel else 0.0
 
-    conf = min(0.98, p * (0.70 + 0.30 * passed / len(checks)))
+    total = len(checks)
+    check_ratio = round(passed / total, 3) if total else 0.0
+    # Confidence = blended score: Poisson probability p (70% weight) scaled by
+    # rule-check pass ratio (30% weight), clamped so no pick claims perfection.
+    conf = min(0.98, p * (0.70 + 0.30 * check_ratio)) if total else 0.0
     conf = round(conf, 3)
     ev = round(conf * (odds - 1) - (1 - conf), 3)
     stake = 0.0 if ev <= 0 else round(min(MAX_STAKE_PCT, ev * KELLY_FRACTION), 1)
@@ -72,7 +82,8 @@ def build_pick(fixture, provider, market="over", odds=DEFAULT_ODDS, before=None)
         "line": {"over": 2.5, "under": 2.5, "over15": 1.5,
                  "under35": 3.5}.get(market),
         "confidence": conf, "model_p": round(p, 3),
-        "checks_passed": passed, "checks_total": len(checks),
+        "checks_passed": passed, "checks_total": total,
+        "check_ratio": check_ratio,
         "missed": missed, "ev": ev, "edge_pct": round(ev * 100, 1),
         "stake_pct": stake, "odds": odds, "tier": tier,
         "xg": [lo, hi],

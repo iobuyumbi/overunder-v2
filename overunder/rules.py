@@ -212,7 +212,7 @@ _EXCLUDE = {
 }
 
 
-def _negative_checks(home_ms, away_ms, market, away_name):
+def _negative_checks(home_ms, away_ms, check_set, away_name, h2h_market):
     h3h = _last(home_ms, 3, "H")
     a3a = _last(away_ms, 3, "A")
     h6 = _last(home_ms, 6)
@@ -220,20 +220,20 @@ def _negative_checks(home_ms, away_ms, market, away_name):
     h6H = _last(home_ms, 6, "H")
     a6A = _last(away_ms, 6, "A")
     checks = {"S6": len(home_ms) >= 4 and len(away_ms) >= 4}
-    if market == "under":
+    if check_set == "under":
         under = lambda m: _tot(m) <= 2.5
         checks.update({
-            "H1u": _low_volume_check(h3h, "gf", 4, 1.0),   # weak home attack
+            "H1u": _low_volume_check(h3h, "gf", 4, 1.0),
             "H2u": _freq4(h6H, under),
             "H3u": _rate(h6, under) >= 0.5,
-            "H10u": _low_volume_check(h3h, "ga", 2, 0.7),  # solid home defence
+            "H10u": _low_volume_check(h3h, "ga", 2, 0.7),
             "A1u": _low_volume_check(a3a, "gf", 4, 1.0),
             "A3u": _freq4(a6A, lambda m: m["gf"] == 0),
             "A4u": _freq4(a6A, under),
             "A5u": _rate(a6, under) >= 0.5,
             "A11u": _low_volume_check(a3a, "ga", 2, 0.7),
         })
-    elif market == "no_btts":
+    elif check_set == "no_btts":
         btts = lambda m: m["gf"] > 0 and m["ga"] > 0
         checks.update({
             "H4n": sum(1 for m in h6H if btts(m)) <= 2,
@@ -247,19 +247,19 @@ def _negative_checks(home_ms, away_ms, market, away_name):
             "A8n": _freq4(a6, lambda m: m["gf"] == 0),
             "A9n": _freq5(a6A, lambda m: m["ga"] == 0),
             "A10n": _freq5(a6, lambda m: m["ga"] == 0),
-            # what no_btts really is: one side dominates the scoring exchange
             "DOM": (_rate(h6, lambda m: m["ga"] == 0) >= 0.5 or
                     _rate(a6, lambda m: m["gf"] == 0) >= 0.5),
         })
-    checks["H2H"] = h2h_check(home_ms, market, away_name)
+    checks["H2H"] = h2h_check(home_ms, h2h_market, away_name)
     return checks
 
 
 def run_checks(home_ms, away_ms, market=None, home_name="", away_name=""):
-    # under35 shares under's mirrored set
+    # under35 shares under's mirrored check set but keeps its own H2H predicate
     if market in ("under", "no_btts", "under35"):
-        neg = "under" if market == "under35" else market
-        return _negative_checks(home_ms, away_ms, neg, away_name)
+        check_set = "under" if market == "under35" else market
+        return _negative_checks(home_ms, away_ms, check_set, away_name,
+                                h2h_market=market)
 
     h3h = _last(home_ms, 3, "H")
     a3a = _last(away_ms, 3, "A")
@@ -326,14 +326,12 @@ def run_checks(home_ms, away_ms, market=None, home_name="", away_name=""):
         })
     elif market == "home_sc":
         checks["A12"] = sum(1 for m in a6 if m["ga"] > 0) >= 5
-        # tightened: perfect scoring consistency required (6/6)
-        checks["H6"] = _rate(h6H, lambda m: m["gf"] > 0) >= 6 / 6
-        checks["H7"] = _rate(h6, lambda m: m["gf"] > 0) >= 6 / 6
+        checks["H6"] = _rate(h6H, lambda m: m["gf"] > 0) >= 5 / 6
+        checks["H7"] = _rate(h6, lambda m: m["gf"] > 0) >= 5 / 6
     elif market == "away_sc":
-        # tightened away scoring: perfect 6/6; home leaks goals (H10 back via base)
         checks.update({
-            "A3": _rate(a6A, lambda m: m["gf"] > 0) >= 6 / 6,
-            "A13": _rate(a6, lambda m: m["gf"] > 0) >= 6 / 6,
+            "A3": _rate(a6A, lambda m: m["gf"] > 0) >= 5 / 6,
+            "A13": _rate(a6, lambda m: m["gf"] > 0) >= 5 / 6,
             "H12": sum(1 for m in h6 if m["ga"] > 0) >= 5,
         })
     elif market == "home_dw":
@@ -354,14 +352,14 @@ def run_checks(home_ms, away_ms, market=None, home_name="", away_name=""):
 
 
 def lambdas(home_ms, away_ms, lg_home=1.45, lg_away=1.15):
-    def avg(ms, venue, key):
+    def avg(ms, venue, key, fallback):
         sel = [m for m in ms if m["venue"] == venue]
-        return (sum(m[key] for m in sel) / len(sel)) if sel else (lg_home if key == "gf" else 1.3)
+        return (sum(m[key] for m in sel) / len(sel)) if sel else fallback
 
-    atk_h = max(0.4, avg(home_ms, "H", "gf") / lg_home)
-    dfc_h = max(0.4, avg(home_ms, "H", "ga") / lg_away)
-    atk_a = max(0.4, avg(away_ms, "A", "gf") / lg_away)
-    dfc_a = max(0.4, avg(away_ms, "A", "ga") / lg_home)
+    atk_h = max(0.4, avg(home_ms, "H", "gf", lg_home) / lg_home)
+    dfc_h = max(0.4, avg(home_ms, "H", "ga", lg_away) / lg_away)
+    atk_a = max(0.4, avg(away_ms, "A", "gf", lg_away) / lg_away)
+    dfc_a = max(0.4, avg(away_ms, "A", "ga", lg_home) / lg_home)
     return (min(3.8, max(0.3, lg_home * atk_h * dfc_a)),
             min(3.2, max(0.2, lg_away * atk_a * dfc_h)))
 
@@ -392,9 +390,6 @@ def market_probs(home_ms, away_ms, max_goals=8):
     p_btts = 1 - p0h - p0a + ph[0] * pa[0]
     p_away_win = sum(ph[h] * pa[a] for h in range(max_goals + 1)
                      for a in range(max_goals + 1) if h < a)
-    p_le2 = sum(ph[h] * pa[a] for h in range(max_goals + 1)
-                for a in range(max_goals + 1) if h + a <= 2)   # 0-2 goals
-    p_ge2 = 1 - p_le2 + ph[0] * pa[0] * 0  # placeholder, computed below
     p0 = ph[0] * pa[0]
     p1 = ph[1] * pa[0] + ph[0] * pa[1]
     p_over15 = 1 - p0 - p1
