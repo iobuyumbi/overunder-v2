@@ -1,25 +1,34 @@
 """Rules engine.
 
-POSITIVE markets -- each market gets its OWN evidence set:
-  over    -- attack-vs-defence complementarity: home attack pairs with away
-             leakage (A9/A11), away attack pairs with home leakage (H8/H10),
-             plus volatile sides (HB/AB = score AND concede in the same
-             games) and the proven over patterns (H2/H3/A4/A5)
-  over15  -- inherits over's set
-  btts    -- union of the home_sc and away_sc profiles: BOTH sides must
-             score regularly (5/6 tightened: H6/H7/A3/A13) and BOTH
-             defences must leak (A9/A11/A12 for home to score,
-             H8/H10/H12 for away to score)
-  home    -- home dominance (H16 wins 3+/6) + acceptable-form rule
+POSITIVE markets -- rule sets are coupled so that BTTS is the literal union
+of the two team-to-score markets.  Key relationships (also enforced in code
+via _EXCLUDE and the btts override block):
+
+  home_sc  = home attack (H6/H7 tightened to 5/6)
+           + AWAY defence LEAKAGE in 5/6 (A9 away-venue, A12 overall)
+           + L3 volume confirmations (H1 home GF, A11 away GA)
+
+  away_sc  = away attack (A3/A13 tightened to 5/6)
+           + HOME defence LEAKAGE in 5/6 (H8 home-venue, H12 overall)
+           + L3 volume confirmations (A1 away GF, H10 home GA)
+
+  btts     = home_sc  U  away_sc   (literal set union: same checks, merged)
+             Both sides must score regularly AND both defences must leak.
+
+  over     -- attack-vs-defence complementarity: home attack pairs with
+             away leakage (A9/A11), away attack pairs with home leakage
+             (H8/H10), plus volatile sides (HB/AB = score AND concede in
+             the same games) and the proven over patterns (H2/H3/A4/A5)
+  over15   -- inherits over's set
+  home     -- home dominance (H16 wins 3+/6) + acceptable-form rule
              (H14/H15: 4 wins in 6 OR unbeaten 5/6) + home solidity (H17)
-             + away no-win (A16) + away leaks (A9/A11/A12)
-  home_sc -- home attack (H6/H7 tightened to 5/6) + away leakage
-  away_sc -- away attack/conceding (A3/A9 tightened to 5/6) + home leakage
-  home_dw -- home's set but draw-friendly: winless-away (A14/A15), weak
-             away attack (A17/A18)
+             + away no-win (A16) + away leaks (A9/A12)
+  home_dw  -- home's evidence but draw-friendly: winless-away (A14/A15),
+             weak away attack (A17/A18)
 
 NEGATIVE markets (under, no_btts): mirrored check set; no_btts has the
 dominance rule (DOM): one side keeps clean sheets OR the other blanks 50%+.
+under35 shares under's check set but uses its own H2H predicate (total<=3).
 
 H2H: expected result in >= half of last up-to-6 meetings; 1/1 counts;
      zero meetings is a neutral pass.
@@ -192,21 +201,29 @@ def _strong_unbeaten(ms):
 # given positive market. They are computed for everyone else, then dropped
 # from these markets' sets (shrinking the confidence denominator on purpose:
 # confidence should reflect relevant evidence only).
+#
+# DESIGN NOTE for the three scoring markets:
+#   home_sc drops its OWN conceded checks (H8/H10 irrelevant: home doesn't
+#     need to concede to merely SCORE) and drops the opponent's attack
+#     evidence (A1/A3-A7 only needed for over/away markets).  It KEEPS
+#     the AWAY concede evidence (A9/A11) -- which is exactly what makes
+#     home likely to score vs this opponent.
+#   away_sc is the mirror: drops AWAY concede (A9/A11) and home attack
+#     (H1/H2-H7), KEEPS HOME concede (H8/H10) so away is likely to score.
+#   btts drops NONE of the concede/scoring base checks -- it needs BOTH
+#     attacks firing AND BOTH defences leaking.  It only drops the over/
+#     BTTS-rate pattern checks (H2/H3/H4/H5 and A4-A7) because those are
+#     already captured implicitly by requiring both halves to fire.
 _EXCLUDE = {
-    # over: keep attack<->concede pairs, patterns, BTTS rates; drop the rest
     "over":    {"H4", "H7", "A6"},
     "over15":  {"H4", "H7", "A6"},
-    # btts: union of home_sc + away_sc profiles; over patterns/BTTS rates out
     "btts":    {"H2", "H3", "H4", "H5", "A4", "A5", "A6", "A7"},
-    # home win: drop BTTS, over, leaky-home and away-scoring support
     "home":    {"H2", "H3", "H4", "H5", "H8", "H10", "A1", "A3",
                 "A4", "A5", "A6", "A7"},
     "home_sc": {"H2", "H3", "H4", "H5", "H8", "H10", "A1", "A3",
                 "A4", "A5", "A6", "A7"},
-    # away_sc: away attack + home defensive leakage
     "away_sc": {"H1", "H2", "H3", "H4", "H5", "H6", "H7",
                 "A4", "A5", "A6", "A7", "A9", "A11"},
-    # home_dw: same exclusions as home; draw-friendly extras added below
     "home_dw": {"H2", "H3", "H4", "H5", "H8", "H10", "A1", "A3",
                 "A4", "A5", "A6", "A7"},
 }
@@ -304,8 +321,12 @@ def run_checks(home_ms, away_ms, market=None, home_name="", away_name=""):
             "AB": sum(1 for m in a6A if m["gf"] > 0 and m["ga"] > 0) >= 3,
         })
     elif market == "btts":
-        # union of the home_sc and away_sc profiles: BOTH sides must score
-        # regularly (5/6 tightened) and BOTH defences must leak
+        # btts = home_sc U away_sc -- the full union:
+        #   * home attack + away leakage (home_sc profile: H6/H7 tightened + A9/A11/A12)
+        #   * away attack + home leakage (away_sc profile: A3/A13 tightened + H8/H10/H12)
+        # Base checks already provide A9/A11 and H8/H10 via _freq5; we add the
+        # venue+overall conceded rates (A12/H12 at 5/6) and tighten all four
+        # scoring checks (H6/H7/A3/A13) from _freq4 -> 5/6.
         checks.update({
             "H6": _rate(h6H, lambda m: m["gf"] > 0) >= 5 / 6,
             "H7": _rate(h6, lambda m: m["gf"] > 0) >= 5 / 6,
@@ -325,10 +346,14 @@ def run_checks(home_ms, away_ms, market=None, home_name="", away_name=""):
             "A16": _freq4(a6A, lambda m: m["gf"] <= m["ga"]),  # away loses OR draws away
         })
     elif market == "home_sc":
+        # home_sc: home attack (tightened 5/6) + AWAY concedes (venue 5/6 via base A9,
+        # venue volume via A11, plus overall A12 at 5/6).
         checks["A12"] = sum(1 for m in a6 if m["ga"] > 0) >= 5
         checks["H6"] = _rate(h6H, lambda m: m["gf"] > 0) >= 5 / 6
         checks["H7"] = _rate(h6, lambda m: m["gf"] > 0) >= 5 / 6
     elif market == "away_sc":
+        # away_sc: away attack (tightened 5/6) + HOME concedes (venue 5/6 via base H8,
+        # venue volume via H10, plus overall H12 at 5/6).
         checks.update({
             "A3": _rate(a6A, lambda m: m["gf"] > 0) >= 5 / 6,
             "A13": _rate(a6, lambda m: m["gf"] > 0) >= 5 / 6,

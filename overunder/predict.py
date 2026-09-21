@@ -21,6 +21,8 @@ MARKET_LABEL = {"over": "Over 2.5", "under": "Under 2.5", "btts": "BTTS",
 
 # which checks count as 'core' per market (for the missed-list flavor).
 # Every key here MUST exist in that market's check dict in rules.run_checks.
+# DESIGN NOTE: btts = home_sc U away_sc (literal set union in run_checks)
+#   home_sc CORE_CHECKS + away_sc CORE_CHECKS minus S6 overlap = btts CORE_CHECKS
 CORE_CHECKS = {
     "over":    ["H1", "A1", "H6", "A3", "A8", "A9", "H8", "A11", "H10",
                 "HB", "AB", "H2", "A4", "H2H"],
