@@ -71,6 +71,23 @@ STATAREA_URL = "https://www.statarea.com/predictions"
 JINA_PROXY = "https://r.jina.ai/https://www.statarea.com/predictions"
 CACHE_DIR = os.getenv("OU_CACHE_DIR", os.path.expanduser("~/.cache/overunder"))
 
+# --- cache tuning (for reruns, backfill, batch runs) --------------------------
+# HTML TTLs (hours).  Team history pages barely change mid-season and are
+# expensive to re-parse, so they get a long TTL.  Fixture/date pages include
+# live score updates which move during a game day, so shorter TTL by default.
+# Cross-check (statarea) card TTL kept independent in load_card(12h default).
+HTML_TTL_TEAM_HOURS   = int(os.getenv("OU_HTML_TTL_TEAM",  "72"))
+HTML_TTL_FIXTURE_HOURS = int(os.getenv("OU_HTML_TTL_FIXTURE", "6"))
+# On-disk provider team_matches parse+merge cache TTL (hours). This sits ON TOP
+# of the HTML cache: even when HTML is fresh, it avoids re-running merge_history
+# and the parse_rows transform across process restarts.
+TEAM_CACHE_TTL_HOURS  = int(os.getenv("OU_TEAM_CACHE_TTL", "168"))   # 7 days
+# predict_day() on-disk memoization: if same fixtures+markets used on rerun,
+# return cached picks instantly (TTL matches fixture TTL by default).
+PREDICT_CACHE_TTL_HOURS = int(os.getenv("OU_PREDICT_CACHE_TTL", str(HTML_TTL_FIXTURE_HOURS)))
+# Disable caches entirely: set OU_CACHE_DISABLE=1 (settlement/verify/live need fresh)
+CACHE_DISABLE = bool(os.getenv("OU_CACHE_DISABLE", ""))
+
 # --- storage ----------------------------------------------------------------
 DATA_DIR = os.getenv("OU_DATA_DIR", os.path.join(os.getcwd(), "data"))
 HISTORY_FILE = os.path.join(DATA_DIR, "prediction_history.json")

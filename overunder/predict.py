@@ -10,8 +10,13 @@ also exposed for inspection.  Gates come from config.MARKET_MIN_CONF.
 One engine, one report, one settlement path."""
 
 from .config import (DEFAULT_ODDS, KELLY_FRACTION, MARKET_MIN_CONF, MAX_STAKE_PCT,
-                     O25_MIN_CONFIDENCE, PREMIUM_TIER)
+                     O25_MIN_CONFIDENCE, PREMIUM_TIER, CACHE_DIR,
+                     PREDICT_CACHE_TTL_HOURS, CACHE_DISABLE)
 from .rules import CHECK_NAMES, lambdas, market_probs, xg_forecast
+from .teams import normalize
+import json
+import os
+import time as _time
 
 MARKET_LABEL = {"over": "Over 2.5", "under": "Under 2.5", "btts": "BTTS",
                 "no_btts": "BTTS No", "home": "Home win",
@@ -100,10 +105,50 @@ def build_pick(fixture, provider, market="over", odds=DEFAULT_ODDS, before=None)
 def predict_day(provider, day=None, markets=("over",), odds=DEFAULT_ODDS,
                 min_conf=O25_MIN_CONFIDENCE, market_min_conf=None):
     """market_min_conf: per-market gates; defaults to config.MARKET_MIN_CONF.
-    Pass an empty dict to use the flat min_conf only (backtests, demos)."""
+    Pass an empty dict to use the flat min_conf only (backtests, demos).
+
+    ON-DISK RERUN CACHE: if the same (day, fixtures, markets, odds) is
+    requested within PREDICT_CACHE_TTL_HOURS (default: fixture HTML TTL), the
+    second+ run returns instantly without re-querying team histories or the
+    rule engine.  Disable entirely with OU_CACHE_DISABLE=1."""
     mmc = MARKET_MIN_CONF if market_min_conf is None else market_min_conf
+    # -- cache lookup (deterministic signature of this predict_day invocation)
+    day_actual = day or _time.strftime("%Y-%m-%d")
+    if not CACHE_DISABLE:
+        try:
+            fixtures = provider.fixtures(day)
+        except Exception:
+            fixtures = []
+        fx_sig = tuple(sorted(
+            (normalize(fx["home"]), normalize(fx["away"]),
+             fx.get("league", "")) for fx in fixtures))
+        mkts_sig = tuple(sorted(markets))
+        odds_sig = tuple(sorted(odds.items())) if isinstance(odds, dict) \
+            else tuple(odds) if isinstance(odds, (list, tuple)) else (odds,)
+        mmc_sig = tuple(sorted(mmc.items()))
+        cache_key = (day_actual, fx_sig, mkts_sig, odds_sig, min_conf, mmc_sig,
+                     type(provider).__name__)
+        cache_path = os.path.join(CACHE_DIR, f"predict_day_{day_actual}.json")
+        ttl = PREDICT_CACHE_TTL_HOURS * 3600
+        import hashlib
+        key_hash = hashlib.sha1(json.dumps(cache_key, sort_keys=True)
+                                 .encode("utf-8")).hexdigest()
+        if os.path.exists(cache_path):
+            try:
+                with open(cache_path, encoding="utf-8") as f:
+                    cache_bucket = json.load(f)
+                rec = cache_bucket.get(key_hash)
+                if rec:
+                    age = _time.time() - rec.get("t", 0)
+                    if 0 <= age <= ttl:
+                        return rec["picks"]
+            except (json.JSONDecodeError, OSError, ValueError, KeyError):
+                pass
+    else:
+        fixtures = provider.fixtures(day)
+
     picks = []
-    for fx in provider.fixtures(day):
+    for fx in fixtures:
         for mkt in markets:
             try:
                 p = build_pick(fx, provider, market=mkt, odds=odds)
@@ -119,4 +164,25 @@ def predict_day(provider, day=None, markets=("over",), odds=DEFAULT_ODDS,
         for i, p in enumerate(group, 1):
             p["num"] = i
     picks.sort(key=lambda p: (list(markets).index(p["market"]), -p["confidence"]))
+
+    # -- cache persist (same deterministic signature)
+    if not CACHE_DISABLE:
+        try:
+            os.makedirs(CACHE_DIR, exist_ok=True)
+            try:
+                with open(cache_path, encoding="utf-8") as f:
+                    cache_bucket = json.load(f)
+                if not isinstance(cache_bucket, dict):
+                    cache_bucket = {}
+            except (json.JSONDecodeError, OSError, ValueError):
+                cache_bucket = {}
+            # prune expired records opportunistically
+            now = _time.time()
+            pruned = {k: v for k, v in cache_bucket.items()
+                      if 0 <= now - v.get("t", now + 1) <= ttl}
+            pruned[key_hash] = {"t": int(now), "picks": picks}
+            with open(cache_path, "w", encoding="utf-8") as f:
+                json.dump(pruned, f)
+        except OSError:
+            pass
     return picks

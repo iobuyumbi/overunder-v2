@@ -4,12 +4,12 @@ POSITIVE markets -- rule sets are coupled so that BTTS is the literal union
 of the two team-to-score markets.  Key relationships (also enforced in code
 via _EXCLUDE and the btts override block):
 
-  home_sc  = home attack (H6/H7 tightened to 5/6)
-           + AWAY defence LEAKAGE in 5/6 (A9 away-venue, A12 overall)
+  home_sc  = home attack (H6/H7 via _freq4 4/6)
+           + AWAY defence LEAKAGE in 4/6 (A9 away-venue, A12 overall)
            + L3 volume confirmations (H1 home GF, A11 away GA)
 
-  away_sc  = away attack (A3/A13 tightened to 5/6)
-           + HOME defence LEAKAGE in 5/6 (H8 home-venue, H12 overall)
+  away_sc  = away attack (A3/A13 via _freq4 4/6)
+           + HOME defence LEAKAGE in 4/6 (H8 home-venue, H12 overall)
            + L3 volume confirmations (A1 away GF, H10 home GA)
 
   btts     = home_sc  U  away_sc   (literal set union: same checks, merged)
@@ -46,9 +46,9 @@ CHECK_NAMES = {
     "H5": "Home BTTS (L6 overall)",
     "H6": "Home scored (4+/6 home)",
     "H7": "Home scored (4+/6 overall)",
-    "H8": "Home conceded (5+/6 home)",
+    "H8": "Home conceded (4+/6 home)",
     "H10": "Home conceded 7+ (L3 home)",
-    "H12": "Home concedes (5+/6 overall)",
+    "H12": "Home concedes (4+/6 overall)",
     "H14": "Home form: 4W/6 or unbeaten 5/6 home",
     "H15": "Home form: 4W/6 or unbeaten 5/6 overall",
     "H16": "Home win (3+/6 home)",
@@ -60,9 +60,9 @@ CHECK_NAMES = {
     "A6": "Away BTTS (L6 away)",
     "A7": "Away BTTS (L6 overall)",
     "A8": "Away scored (4+/6 overall)",
-    "A9": "Away conceded (5+/6 away)",
+    "A9": "Away conceded (4+/6 away)",
     "A11": "Away conceded 7+ (L3 away)",
-    "A12": "Away concedes (5+/6 overall)",
+    "A12": "Away concedes (4+/6 overall)",
     "A13": "Away scored (4+/6 overall)",
     "A14": "Away winless (4+/6 away)",
     "A15": "Away winless (4+/6 overall)",
@@ -295,7 +295,7 @@ def run_checks(home_ms, away_ms, market=None, home_name="", away_name=""):
         "H5": _rate(h6, btts) >= 0.5,
         "H6": _freq4(h6H, lambda m: m["gf"] > 0),
         "H7": _freq4(h6, lambda m: m["gf"] > 0),
-        "H8": _freq5(h6H, lambda m: m["ga"] > 0),
+        "H8": _freq4(h6H, lambda m: m["ga"] > 0),
         "H10": _volume_check(h3h, "ga"),
         "A1": _volume_check(a3a, "gf"),
         "A3": _freq4(a6A, lambda m: m["gf"] > 0),
@@ -303,7 +303,7 @@ def run_checks(home_ms, away_ms, market=None, home_name="", away_name=""):
         "A5": _rate(a6, over) >= 0.5,
         "A6": _rate(a6A, btts) >= 0.5,
         "A7": _rate(a6, btts) >= 0.5,
-        "A9": _freq5(a6A, lambda m: m["ga"] > 0),
+        "A9": _freq4(a6A, lambda m: m["ga"] > 0),
         "A11": _volume_check(a3a, "ga"),
         "S6": len(home_ms) >= 4 and len(away_ms) >= 4,
     }
@@ -322,23 +322,23 @@ def run_checks(home_ms, away_ms, market=None, home_name="", away_name=""):
         })
     elif market == "btts":
         # btts = home_sc U away_sc -- the full union:
-        #   * home attack + away leakage (home_sc profile: H6/H7 tightened + A9/A11/A12)
-        #   * away attack + home leakage (away_sc profile: A3/A13 tightened + H8/H10/H12)
-        # Base checks already provide A9/A11 and H8/H10 via _freq5; we add the
-        # venue+overall conceded rates (A12/H12 at 5/6) and tighten all four
-        # scoring checks (H6/H7/A3/A13) from _freq4 -> 5/6.
+        #   * home attack + away leakage (home_sc profile: H6/H7 4/6 + A9/A11/A12)
+        #   * away attack + home leakage (away_sc profile: A3/A13 4/6 + H8/H10/H12)
+        # Base checks already provide A9/A11 and H8/H10 via _freq4; we add the
+        # venue+overall conceded rates (A12/H12 at 4/6) and explicitly compute
+        # overall scoring (H7/A13) using the same _freq4 bar as venue checks.
         checks.update({
-            "H6": _rate(h6H, lambda m: m["gf"] > 0) >= 5 / 6,
-            "H7": _rate(h6, lambda m: m["gf"] > 0) >= 5 / 6,
-            "A3": _rate(a6A, lambda m: m["gf"] > 0) >= 5 / 6,
-            "A13": _rate(a6, lambda m: m["gf"] > 0) >= 5 / 6,
-            "A12": sum(1 for m in a6 if m["ga"] > 0) >= 5,
-            "H12": sum(1 for m in h6 if m["ga"] > 0) >= 5,
+            "H6": _freq4(h6H, lambda m: m["gf"] > 0),
+            "H7": _freq4(h6, lambda m: m["gf"] > 0),
+            "A3": _freq4(a6A, lambda m: m["gf"] > 0),
+            "A13": _freq4(a6, lambda m: m["gf"] > 0),
+            "A12": sum(1 for m in a6 if m["ga"] > 0) >= 4,
+            "H12": sum(1 for m in h6 if m["ga"] > 0) >= 4,
         })
     elif market == "home":
         # dominance + acceptable form + solidity at home, away no-win + leaks
         checks.update({
-            "A12": sum(1 for m in a6 if m["ga"] > 0) >= 5,
+            "A12": sum(1 for m in a6 if m["ga"] > 0) >= 4,
             "H14": _strong_unbeaten(h6H),
             "H15": _strong_unbeaten(h6),
             "H16": _freq3(h6H, lambda m: m["gf"] > m["ga"]),   # wins 3+/6 home
@@ -346,23 +346,23 @@ def run_checks(home_ms, away_ms, market=None, home_name="", away_name=""):
             "A16": _freq4(a6A, lambda m: m["gf"] <= m["ga"]),  # away loses OR draws away
         })
     elif market == "home_sc":
-        # home_sc: home attack (tightened 5/6) + AWAY concedes (venue 5/6 via base A9,
-        # venue volume via A11, plus overall A12 at 5/6).
-        checks["A12"] = sum(1 for m in a6 if m["ga"] > 0) >= 5
-        checks["H6"] = _rate(h6H, lambda m: m["gf"] > 0) >= 5 / 6
-        checks["H7"] = _rate(h6, lambda m: m["gf"] > 0) >= 5 / 6
+        # home_sc: home attack (_freq4 4/6) + AWAY concedes (venue 4/6 via base A9,
+        # venue volume via A11, plus overall A12 at 4/6).
+        checks["A12"] = sum(1 for m in a6 if m["ga"] > 0) >= 4
+        checks["H6"] = _freq4(h6H, lambda m: m["gf"] > 0)
+        checks["H7"] = _freq4(h6, lambda m: m["gf"] > 0)
     elif market == "away_sc":
-        # away_sc: away attack (tightened 5/6) + HOME concedes (venue 5/6 via base H8,
-        # venue volume via H10, plus overall H12 at 5/6).
+        # away_sc: away attack (_freq4 4/6) + HOME concedes (venue 4/6 via base H8,
+        # venue volume via H10, plus overall H12 at 4/6).
         checks.update({
-            "A3": _rate(a6A, lambda m: m["gf"] > 0) >= 5 / 6,
-            "A13": _rate(a6, lambda m: m["gf"] > 0) >= 5 / 6,
-            "H12": sum(1 for m in h6 if m["ga"] > 0) >= 5,
+            "A3": _freq4(a6A, lambda m: m["gf"] > 0),
+            "A13": _freq4(a6, lambda m: m["gf"] > 0),
+            "H12": sum(1 for m in h6 if m["ga"] > 0) >= 4,
         })
     elif market == "home_dw":
         # home's evidence but draw-friendly: winless (not loss-heavy) away
         checks.update({
-            "A12": sum(1 for m in a6 if m["ga"] > 0) >= 5,
+            "A12": sum(1 for m in a6 if m["ga"] > 0) >= 4,
             "H14": _strong_unbeaten(h6H),
             "H15": _strong_unbeaten(h6),
             "H17": _low_volume_check(h3h, "ga", 2, 0.7),

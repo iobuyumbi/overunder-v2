@@ -332,10 +332,10 @@ class TestFourOfSixAndNegativeMarkets(unittest.TestCase):
         regular = [M("H", 2, 1), M("A", 1, 0), M("H", 0, 1), M("A", 2, 2),
                    M("H", 1, 1), M("A", 1, 0)]   # scored 5/6, conceded 4/6
         c = run_checks(regular, regular, market="btts", home_name="A", away_name="B")
-        self.assertTrue(c["H7"])    # scored 5/6 overall (tightened bar)
-        self.assertTrue(c["A13"])   # away side also scores 5/6 overall
-        self.assertFalse(c["H6"])   # home scored only 2/3 home -> below 5/6
-        self.assertFalse(c["A9"])   # away rarely concedes away -> pair fails
+        self.assertTrue(c["H7"])    # overall scored 5/6 → passes _freq4 4/6 bar
+        self.assertTrue(c["A13"])   # away side also scores 5/6 overall → passes
+        self.assertTrue(c["H6"])    # home venue scored 2/3 → passes _freq4 2+ of last 3
+        self.assertFalse(c["A9"])   # away rarely concedes away (1/3 < 2/3) → pair fails
 
     def test_under_market_checks(self):
         weak = [M("H", 1, 0), M("H", 0, 1), M("H", 1, 0), M("A", 0, 0),

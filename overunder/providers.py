@@ -23,10 +23,13 @@ import time
 
 import requests
 
-from .config import CACHE_DIR, DATA_DIR
+from .config import (CACHE_DIR, DATA_DIR, HTML_TTL_TEAM_HOURS,
+                     HTML_TTL_FIXTURE_HOURS, TEAM_CACHE_TTL_HOURS,
+                     CACHE_DISABLE)
 from .teams import normalize
 
 HISTORY_DB = os.path.join(DATA_DIR, "history_db.json")
+TEAM_CACHE_FILE = os.path.join(CACHE_DIR, "team_cache.json")
 
 
 def load_history_db():
@@ -200,16 +203,71 @@ class SoccerbaseProvider:
         if os.path.exists(self._ids_path):
             with open(self._ids_path, encoding="utf-8") as f:
                 self._ids = json.load(f)
+        self._team_cache_path = TEAM_CACHE_FILE
+        self._team_cache_dirty = False
+        self._load_team_cache()
+
+    def _load_team_cache(self):
+        """Load on-disk team_matches parse+merge cache. TTL in hours per key,
+        defaults to TEAM_CACHE_TTL_HOURS (7 days). Stored as:
+        { "<team|before>": {"t": epoch, "v": [team_matches list]} }"""
+        self._team_cache = {}
+        if CACHE_DISABLE or not os.path.exists(self._team_cache_path):
+            return
+        try:
+            with open(self._team_cache_path, encoding="utf-8") as f:
+                disk = json.load(f)
+            now = time.time()
+            ttl = TEAM_CACHE_TTL_HOURS * 3600
+            kept = 0
+            for k, rec in disk.items():
+                age = now - rec.get("t", 0)
+                if 0 <= age <= ttl and isinstance(rec.get("v"), list):
+                    self._team_cache[k] = rec
+                    kept += 1
+            if kept != len(disk):
+                self._team_cache_dirty = True
+        except (json.JSONDecodeError, OSError, ValueError):
+            self._team_cache = {}
+
+    def _save_team_cache(self):
+        if not self._team_cache_dirty:
+            return
+        try:
+            os.makedirs(CACHE_DIR, exist_ok=True)
+            with open(self._team_cache_path, "w", encoding="utf-8") as f:
+                json.dump(self._team_cache, f)
+            self._team_cache_dirty = False
+        except OSError:
+            pass
+
+    def __del__(self):
+        try:
+            if getattr(self, "_team_cache_dirty", False):
+                self._save_team_cache()
+        except Exception:
+            pass
 
     # -- fetch plumbing ------------------------------------------------------
-    def _get(self, url, cache_name, fresh=False):
+    def _get(self, url, cache_name, fresh=False, ttl_hours=None):
         """fresh=True bypasses the read cache (settlement/verify need live
         scores; backfill/backtest want the cache). Responses are still
-        written to cache for other callers."""
+        written to cache for other callers.
+
+        ttl_hours: overrides the default TTL inferred from cache_name prefix:
+            sb_team_* / search_*  -> HTML_TTL_TEAM_HOURS    (72h default)
+            sb_date_* / others    -> HTML_TTL_FIXTURE_HOURS (6h default)
+        """
         import sys as _sys
         path = os.path.join(CACHE_DIR, cache_name)
-        cached = (not fresh) and os.path.exists(path) \
-                 and time.time() - os.path.getmtime(path) < 6 * 3600
+        if ttl_hours is None:
+            if cache_name.startswith("sb_team_") or cache_name.startswith("search_"):
+                ttl_hours = HTML_TTL_TEAM_HOURS
+            else:
+                ttl_hours = HTML_TTL_FIXTURE_HOURS
+        use_cache = not (fresh or CACHE_DISABLE)
+        cached = use_cache and os.path.exists(path) \
+                 and time.time() - os.path.getmtime(path) < ttl_hours * 3600
         if not cached:
             print(f"[soccerbase] fetching {url}", file=_sys.stderr, flush=True)
         if cached:
@@ -342,18 +400,34 @@ class SoccerbaseProvider:
         key = normalize(team)
         if before is not None:
             key = key + "|" + before          # cache is point-in-time aware
+        # 1) memory cache (same process)
+        mem_key = "_mem:" + key
         if not hasattr(self, "_team_cache"):
             self._team_cache = {}
-        if key in self._team_cache:
-            return self._team_cache[key]
-        result = self._team_matches_impl(team, limit, before=before)
-        self._team_cache[key] = result
+        if mem_key in self._team_cache:
+            return self._team_cache[mem_key]
+        # 2) on-disk cache (cross-process)
+        disk_rec = self._team_cache.get(key)
+        result = None
+        if disk_rec is not None:
+            result = disk_rec.get("v")
+            if result is not None and len(result) > limit:
+                result = result[-limit:]
+        # 3) fall back to impl + populate both caches
+        if result is None:
+            full = self._team_matches_impl(team, limit=1000, before=before)
+            self._team_cache[key] = {"t": int(time.time()), "v": full}
+            self._team_cache_dirty = True
+            self._save_team_cache()
+            result = full[-limit:]
+        self._team_cache[mem_key] = result
         return result
 
     def _team_matches_impl(self, team, limit=12, before=None):
         tid = self._resolve_team_id(team)
         html = self._get(f"{self.BASE}/teams/team.sd?team_id={tid}&teamTabs=results",
-                         f"sb_team_{tid}.html")
+                         f"sb_team_{tid}.html",
+                         ttl_hours=HTML_TTL_TEAM_HOURS)
         rows = [r for r in self._parse_rows(html) if r["hg"] is not None]
         import sys as _sys
         print(f"[soccerbase] team {team}: {len(rows)} scored matches",
@@ -364,9 +438,8 @@ class SoccerbaseProvider:
             gf, ga = (r["hg"], r["ag"]) if venue == "H" else (r["ag"], r["hg"])
             out.append({"venue": venue, "gf": gf, "ga": ga, "date": r["date"] or "",
                         "opp": r["away"] if venue == "H" else r["home"]})
-        self._team_cache = getattr(self, "_team_cache", {})
         merged = merge_history(out, team, before=before)
-        return merged[-limit:]
+        return merged
 
     def day_rows(self, day):
         """All parsed rows for one day page: played matches carry hg/ag,
