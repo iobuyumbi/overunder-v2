@@ -1,5 +1,7 @@
 """VIP-style daily report rendering (the format your channel already uses)."""
 
+import datetime
+
 from .history import yesterday_record
 
 SECTION_ICONS = {"over": "🟢", "under": "🔴", "btts": "🔵", "no_btts": "🚫",
@@ -7,7 +9,39 @@ SECTION_ICONS = {"over": "🟢", "under": "🔴", "btts": "🔵", "no_btts": "�
                  "over15": "🟢", "under35": "🔴", "home_dw": "🛡"}
 
 
-def render_report(picks, day=None, title="Over / Under 2.5 + BTTS + Home"):
+def _day_label(d_iso, today_iso=None):
+    if today_iso is None:
+        today_iso = datetime.date.today().isoformat()
+    if d_iso == today_iso:
+        return f"📅 TODAY ({d_iso})"
+    try:
+        d = datetime.date.fromisoformat(d_iso)
+        t = datetime.date.fromisoformat(today_iso)
+        delta = (d - t).days
+        if delta == 1:
+            return f"📅 TOMORROW ({d_iso})"
+        if delta > 1:
+            return f"📅 +{delta}d ({d_iso})"
+        if delta == -1:
+            return f"📅 YESTERDAY ({d_iso})"
+        if delta < -1:
+            return f"📅 {delta}d ({d_iso})"
+    except (ValueError, TypeError):
+        pass
+    return f"📅 {d_iso}"
+
+
+def render_report(picks, day=None, title="Over / Under 2.5 + BTTS + Home",
+                  day_diagnostics=None):
+    """Render the VIP report.
+
+    picks             — list of pick dicts (may span multiple dates)
+    day               — optional ISO date; if set, used as the 'today' baseline
+                        for day labels; otherwise real system date is used
+    title             — banner channel name
+    day_diagnostics   — optional {iso_date: {"total": N, "results": N,
+                        "fixtures": N, "qualified": N}} dict for per-day counts
+    """
     lines = []
     bar = "═" * 46
     lines.append("║       ♟  VIP · DEEP ANALYSIS REPORT        ║")
@@ -22,32 +56,65 @@ def render_report(picks, day=None, title="Over / Under 2.5 + BTTS + Home"):
     lines.append("")
     lines.append("---")
     lines.append("")
-    lines.append("📅 TODAY")
-    lines.append("")
-    markets = []
-    for p in picks:
-        if p["market"] not in markets:
-            markets.append(p["market"])
-    for mkt in markets:
-        icon = SECTION_ICONS.get(mkt, "⚽")
-        label = picks[[p["market"] for p in picks].index(mkt)]["label"]
-        lines.append(f"{icon} {label}")
+
+    today_iso = day or datetime.date.today().isoformat()
+    dates_in_picks = sorted({p["date"] for p in picks})
+    diag_keys = sorted(day_diagnostics.keys()) if day_diagnostics else []
+    all_dates = sorted(set(dates_in_picks) | set(diag_keys))
+
+    if not all_dates:
+        lines.append(f"  (no picks and no diagnostics provided — nothing to report)")
+        return "\n".join(lines)
+
+    for d_iso in all_dates:
+        lines.append(_day_label(d_iso, today_iso))
         lines.append("")
-        premiers = [p for p in picks if p["market"] == mkt and p["tier"].startswith("🔥")]
-        solids = [p for p in picks if p["market"] == mkt and p["tier"].startswith("✅")]
-        if premiers:
-            lines.append("  🔥 Premium picks")
+        diag = (day_diagnostics or {}).get(d_iso)
+        if diag:
+            parts = []
+            if "total" in diag and "results" in diag:
+                parts.append(f"{diag['results']}/{diag['total']} already played")
+            if "fixtures" in diag:
+                played = diag.get("results", diag.get("total", diag["fixtures"]) - diag["fixtures"])
+                parts.append(f"{diag['fixtures']} upcoming fixtures")
+            if "qualified" in diag:
+                parts.append(f"{diag['qualified']} qualifying picks")
+            if parts:
+                lines.append("  📈 " + " · ".join(parts))
+                lines.append("")
+        day_picks = [p for p in picks if p["date"] == d_iso]
+        if not day_picks:
+            lines.append("  (no qualifying picks for this date)")
             lines.append("")
-            for p in premiers:
-                lines.extend(_pick_block(p))
-        if solids:
-            lines.append("  ✅ Solid picks")
+            lines.append("---")
             lines.append("")
-            for p in solids:
-                lines.extend(_pick_block(p))
-        if not premiers and not solids:
-            lines.append("  (no qualified picks)")
+            continue
+        markets = []
+        for p in day_picks:
+            if p["market"] not in markets:
+                markets.append(p["market"])
+        for mkt in markets:
+            icon = SECTION_ICONS.get(mkt, "⚽")
+            label = day_picks[[p["market"] for p in day_picks].index(mkt)]["label"]
+            lines.append(f"{icon} {label}")
             lines.append("")
+            premiers = [p for p in day_picks if p["market"] == mkt and p["tier"].startswith("🔥")]
+            solids = [p for p in day_picks if p["market"] == mkt and p["tier"].startswith("✅")]
+            if premiers:
+                lines.append("  🔥 Premium picks")
+                lines.append("")
+                for p in premiers:
+                    lines.extend(_pick_block(p))
+            if solids:
+                lines.append("  ✅ Solid picks")
+                lines.append("")
+                for p in solids:
+                    lines.extend(_pick_block(p))
+            if not premiers and not solids:
+                lines.append("  (no qualified picks)")
+                lines.append("")
+        lines.append("---")
+        lines.append("")
     return "\n".join(lines)
 
 

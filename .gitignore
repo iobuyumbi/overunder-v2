@@ -24,6 +24,7 @@ api_key.txt
 *.failed
 *.raw
 *.corrupt-*
+live_bt_*.txt
 
 # cache files accidentally written into the repo by an old unexpanded
 # ~/.cache path -- keep them out of version control

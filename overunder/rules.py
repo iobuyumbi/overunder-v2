@@ -217,13 +217,14 @@ def _strong_unbeaten(ms):
 _EXCLUDE = {
     "over":    {"H4", "H7", "A6"},
     "over15":  {"H4", "H7", "A6"},
-    "btts":    {"H2", "H3", "H4", "H5", "A4", "A5", "A6", "A7"},
+    "btts":    {"H2", "H3", "H4", "H5", "A4", "A5", "A6", "A7",
+                "H1", "A11", "A1", "H10"},
     "home":    {"H2", "H3", "H4", "H5", "H8", "H10", "A1", "A3",
-                "A4", "A5", "A6", "A7"},
+                "A4", "A5", "A6", "A7", "A11", "H17"},
     "home_sc": {"H2", "H3", "H4", "H5", "H8", "H10", "A1", "A3",
-                "A4", "A5", "A6", "A7"},
+                "A4", "A5", "A6", "A7", "H1", "A11"},
     "away_sc": {"H1", "H2", "H3", "H4", "H5", "H6", "H7",
-                "A4", "A5", "A6", "A7", "A9", "A11"},
+                "A4", "A5", "A6", "A7", "A9", "A11", "A1", "H10"},
     "home_dw": {"H2", "H3", "H4", "H5", "H8", "H10", "A1", "A3",
                 "A4", "A5", "A6", "A7"},
 }
@@ -336,13 +337,12 @@ def run_checks(home_ms, away_ms, market=None, home_name="", away_name=""):
             "H12": sum(1 for m in h6 if m["ga"] > 0) >= 4,
         })
     elif market == "home":
-        # dominance + acceptable form + solidity at home, away no-win + leaks
+        # dominance + acceptable form + away no-win + leaks
         checks.update({
             "A12": sum(1 for m in a6 if m["ga"] > 0) >= 4,
             "H14": _strong_unbeaten(h6H),
             "H15": _strong_unbeaten(h6),
             "H16": _freq3(h6H, lambda m: m["gf"] > m["ga"]),   # wins 3+/6 home
-            "H17": _low_volume_check(h3h, "ga", 2, 0.7),       # solid home defence
             "A16": _freq4(a6A, lambda m: m["gf"] <= m["ga"]),  # away loses OR draws away
         })
     elif market == "home_sc":

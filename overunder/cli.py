@@ -575,22 +575,50 @@ def cmd_scrape_check(args):
 def cmd_report(args):
     prov = DemoProvider() if args.demo else _provider(args.demo)
     mkts = _markets(args.markets)
-    picks = []
-    for d in _date_range(args):
+    date_window = _date_range(args)
+    day_diag = {}
+    for d in date_window:
         try:
-            picks += predict_day(prov, day=d, markets=mkts)
-        except RuntimeError as e:
-            print(f"report: no fixtures for {d} ({e})", file=sys.stderr)
-    # renumber per market across the whole window (dates stay on each pick block)
+            rows = prov.day_rows(d)
+            total = len(rows)
+            results = sum(1 for r in rows if r["hg"] is not None)
+            day_diag[d] = {"total": total, "results": results,
+                           "fixtures": total - results, "qualified": 0}
+        except Exception as e:
+            print(f"report: cannot read fixture rows for {d} ({e})", file=sys.stderr)
+            day_diag[d] = {"total": 0, "results": 0, "fixtures": 0, "qualified": 0}
+    date_set = set(date_window)
+    h = hist._load()
+    history_picks = [dict(p) for p in h["pending"] + h["settled"]
+                     if p["date"] in date_set and p.get("market") in mkts]
+    if history_picks:
+        picks = history_picks
+        print(f"report: loaded {len(picks)} picks from history for {len(date_window)} day(s)",
+              file=sys.stderr)
+    else:
+        picks = []
+        for d in date_window:
+            try:
+                picks += predict_day(prov, day=d, markets=mkts)
+            except RuntimeError as e:
+                print(f"report: no fixtures for {d} ({e})", file=sys.stderr)
+        print(f"report: predicted {len(picks)} picks live (no history found)",
+              file=sys.stderr)
+    for d in date_window:
+        day_diag[d]["qualified"] = sum(1 for p in picks if p["date"] == d)
     for mkt in mkts:
-        group = [p for p in picks if p["market"] == mkt]
+        group = sorted([p for p in picks if p["market"] == mkt],
+                       key=lambda p: -p.get("confidence", 0))
         for i, p in enumerate(group, 1):
             p["num"] = i
+    picks.sort(key=lambda p: (list(mkts).index(p["market"]) if p["market"] in mkts else 999,
+                              -p.get("confidence", 0)))
     if args.demo:
         sample_card = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                    "sample_data", "sample_card_2026-09-12.md")
         picks = st.cross_check(picks, st.parse_card(open(sample_card).read()))
-    report = render_report(picks, day=args.date)
+    baseline = args.date or date_window[0] if date_window else None
+    report = render_report(picks, day=baseline, day_diagnostics=day_diag)
     print(report)
     if args.telegram:
         send_telegram(report)
