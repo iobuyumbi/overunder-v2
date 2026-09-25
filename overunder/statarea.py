@@ -87,8 +87,14 @@ def _parse_block(tokens, i, league):
     j = i + 1
 
     def skip_junk(k):
+        # separators and score artefacts around team names: '-', ints (votes,
+        # half/full-time goals), datetimes, '2:1' scorelines, and the HT/FT
+        # marker statarea inserts for live/played matches:
+        #   played:   DATE hg HOME ag HT ht:score AWAY
+        #   upcoming: DATE -  HOME -  AWAY
         while k < n and (tokens[k] == "-" or INT_RE.match(tokens[k])
                          or DATE_RE.match(tokens[k]) or SCORE_RE.match(tokens[k])
+                         or tokens[k].upper() in ("HT", "FT")
                          or tokens[k].startswith("**")):
             k += 1
         return k
@@ -119,6 +125,10 @@ def _parse_block(tokens, i, league):
             j += 1
             scanned += 1
         if len(stats) < 11:
+            return None, i + 1
+        # sanity: 1X2 percentages must sum to ~100; rejects blocks corrupted
+        # by layout drift (e.g. a stray goal count shifting the stat columns)
+        if not (95 <= stats[0] + stats[1] + stats[2] <= 105):
             return None, i + 1
         return {"league": league, "time": tokens[i], "home": home, "away": away,
                 "tip": tip, "p_home": stats[0], "p_draw": stats[1], "p_away": stats[2],

@@ -146,6 +146,8 @@ def _pick_block(p):
         shown = "; ".join(p["missed"][:3])
         more = f" (+{len(p['missed'])-3} more)" if len(p["missed"]) > 3 else ""
         b.append(f"     Missed: {shown}{more}")
+    if p.get("league_caution"):
+        b.append(f"     ⚠ CAUTION: {p['league_caution']}")
     b.append("")
     return b
 

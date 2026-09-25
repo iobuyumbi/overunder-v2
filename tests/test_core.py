@@ -328,14 +328,20 @@ class TestNoLookahead(unittest.TestCase):
 
 
 class TestFourOfSixAndNegativeMarkets(unittest.TestCase):
-    def test_four_of_six_checks(self):
+    def test_six_of_six_scoring_contract(self):
+        # scored category is 6/6 (fallback 3/3): a single blank fails the check
         regular = [M("H", 2, 1), M("A", 1, 0), M("H", 0, 1), M("A", 2, 2),
                    M("H", 1, 1), M("A", 1, 0)]   # scored 5/6, conceded 4/6
         c = run_checks(regular, regular, market="btts", home_name="A", away_name="B")
-        self.assertTrue(c["H7"])    # overall scored 5/6 → passes _freq4 4/6 bar
-        self.assertTrue(c["A13"])   # away side also scores 5/6 overall → passes
-        self.assertTrue(c["H6"])    # home venue scored 2/3 → passes _freq4 2+ of last 3
+        self.assertFalse(c["H7"])   # overall scored 5/6 → fails the 6/6 bar
+        self.assertFalse(c["A13"])  # away side also 5/6 overall → fails
+        self.assertFalse(c["H6"])   # home venue scored 2/3 → fails the 3/3 short bar
         self.assertFalse(c["A9"])   # away rarely concedes away (1/3 < 2/3) → pair fails
+        # a perfect scoring record passes every scoring check
+        perfect = [M("H", 2, 1), M("A", 1, 2), M("H", 1, 1), M("A", 2, 2),
+                   M("H", 3, 1), M("A", 1, 1)]   # scored 6/6, conceded 6/6
+        c2 = run_checks(perfect, perfect, market="btts", home_name="A", away_name="B")
+        self.assertTrue(c2["H6"] and c2["H7"] and c2["A3"] and c2["A13"])
 
     def test_under_market_checks(self):
         weak = [M("H", 1, 0), M("H", 0, 1), M("H", 1, 0), M("A", 0, 0),
@@ -658,6 +664,83 @@ class TestVoidStale(unittest.TestCase):
         settled = hist._load()["settled"]
         self.assertEqual(settled[-1]["result"], "P")
         self.assertEqual(settled[-1]["profit"], 0.0)
+
+
+class TestLeagueHealth(unittest.TestCase):
+    def _reload_with_tmp(self, prefix):
+        import tempfile, importlib
+        os.environ["OU_DATA_DIR"] = tempfile.mkdtemp(prefix=prefix)
+        import overunder.config as cfg
+        importlib.reload(cfg)
+        importlib.reload(hist)
+        import overunder.leagues as lg
+        importlib.reload(lg)
+        return lg
+
+    def test_compute_health_flags_losing_pair(self):
+        from datetime import date, timedelta
+        lg = self._reload_with_tmp("ou_lg_")
+        today = date.today().isoformat()
+
+        def rec(league, market, result, profit, d=today):
+            return {"date": d, "league": league, "market": market,
+                    "result": result, "profit": profit, "home": "A", "away": "B"}
+
+        settled = ([rec("Mystery League", "btts", "L", -0.2) for _ in range(6)] +
+                   [rec("Mystery League", "over", "W", 0.2) for _ in range(6)] +
+                   [rec("Small Sample", "btts", "L", -0.2) for _ in range(3)] +
+                   [rec("Voided League", "btts", "P", 0.0) for _ in range(9)])
+        hist._save({"pending": [], "settled": settled})
+        health = lg.compute_health()
+        # 6 losing btts picks, profitable elsewhere -> pair cautioned
+        self.assertTrue(health["mystery league"]["btts"]["caution"])
+        # winning pair in the same league is NOT flagged
+        self.assertFalse(health["mystery league"]["over"]["caution"])
+        # below min sample -> not flagged
+        self.assertFalse(health["small sample"]["btts"]["caution"])
+        # voids don't count toward league health at all
+        self.assertNotIn("voided league", health)
+        # trailing window: losses 60d ago fall outside the default 30d window
+        old = (date.today() - timedelta(days=60)).isoformat()
+        hist._save({"pending": [], "settled":
+                    [rec("Mystery League", "btts", "L", -0.2, d=old)
+                     for _ in range(6)]})
+        self.assertEqual(lg.compute_health(), {})
+
+    def test_allow_list_protects_league(self):
+        from datetime import date
+        lg = self._reload_with_tmp("ou_lg_allow_")
+        lg.LEAGUE_ALLOW = {"Protected League"}
+        today = date.today().isoformat()
+        hist._save({"pending": [], "settled": [
+            {"date": today, "league": "Protected League", "market": "btts",
+             "result": "L", "profit": -0.2, "home": "A", "away": "B"}
+            for _ in range(6)]})
+        health = lg.compute_health()
+        self.assertFalse(health["protected league"]["btts"]["caution"])
+
+    def test_predict_day_cautions_but_never_blocks(self):
+        import importlib
+        lg = self._reload_with_tmp("ou_lg_pred_")
+        os.environ["OU_CACHE_DISABLE"] = "1"   # keep runs deterministic
+        import overunder.config as cfg2
+        importlib.reload(cfg2)
+        import overunder.predict as pred
+        importlib.reload(pred)
+        prov = DemoProvider()
+        base = pred.predict_day(prov, markets=("over", "btts", "home"),
+                                market_min_conf={})
+        self.assertTrue(base)   # demo data must produce picks at flat gate
+        leagues_found = {p["league"] for p in base}
+        # flag every league that produced a pick -> picks still come out,
+        # but every one must carry a league_caution warning
+        blocked = {lg.league_key(x) for x in leagues_found}
+        picks = pred.predict_day(prov, markets=("over", "btts", "home"),
+                                 market_min_conf={},
+                                 league_caution=({}, blocked))
+        self.assertEqual(len(picks), len(base))
+        self.assertTrue(all(p.get("league_caution") for p in picks))
+        os.environ.pop("OU_CACHE_DISABLE", None)
 
 
 class TestDotenv(unittest.TestCase):

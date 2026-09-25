@@ -205,6 +205,7 @@ class SoccerbaseProvider:
                 self._ids = json.load(f)
         self._team_cache_path = TEAM_CACHE_FILE
         self._team_cache_dirty = False
+        self._mem_cache = {}   # same-process only; NEVER written to disk
         self._load_team_cache()
 
     def _load_team_cache(self):
@@ -221,13 +222,18 @@ class SoccerbaseProvider:
             ttl = TEAM_CACHE_TTL_HOURS * 3600
             kept = 0
             for k, rec in disk.items():
+                # tolerate polluted/legacy entries (e.g. raw lists leaked from
+                # the old in-process mem cache): skip anything that is not a
+                # {"t": epoch, "v": [...]} record instead of crashing
+                if not isinstance(rec, dict):
+                    continue
                 age = now - rec.get("t", 0)
                 if 0 <= age <= ttl and isinstance(rec.get("v"), list):
                     self._team_cache[k] = rec
                     kept += 1
             if kept != len(disk):
                 self._team_cache_dirty = True
-        except (json.JSONDecodeError, OSError, ValueError):
+        except (json.JSONDecodeError, OSError, ValueError, AttributeError):
             self._team_cache = {}
 
     def _save_team_cache(self):
@@ -400,16 +406,16 @@ class SoccerbaseProvider:
         key = normalize(team)
         if before is not None:
             key = key + "|" + before          # cache is point-in-time aware
-        # 1) memory cache (same process)
-        mem_key = "_mem:" + key
-        if not hasattr(self, "_team_cache"):
-            self._team_cache = {}
-        if mem_key in self._team_cache:
-            return self._team_cache[mem_key]
+        # 1) memory cache (same process, kept SEPARATE so raw lists never
+        #    leak into the on-disk {"t","v"} record file)
+        if not hasattr(self, "_mem_cache"):
+            self._mem_cache = {}
+        if key in self._mem_cache:
+            return self._mem_cache[key]
         # 2) on-disk cache (cross-process)
         disk_rec = self._team_cache.get(key)
         result = None
-        if disk_rec is not None:
+        if isinstance(disk_rec, dict):
             result = disk_rec.get("v")
             if result is not None and len(result) > limit:
                 result = result[-limit:]
@@ -420,7 +426,7 @@ class SoccerbaseProvider:
             self._team_cache_dirty = True
             self._save_team_cache()
             result = full[-limit:]
-        self._team_cache[mem_key] = result
+        self._mem_cache[key] = result
         return result
 
     def _team_matches_impl(self, team, limit=12, before=None):

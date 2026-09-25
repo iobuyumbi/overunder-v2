@@ -52,6 +52,82 @@ def _parse_market_min_conf():
 
 MARKET_MIN_CONF = _parse_market_min_conf()
 PREMIUM_TIER = float(os.getenv("PREMIUM_TIER", "0.85"))   # >= -> 🔥 Premium
+
+
+def _parse_freq_thresholds():
+    """Per-category frequency thresholds.  Each category defines:
+         full   = numerator out of the last 6 matches (default window)
+         short  = numerator out of the last 3 matches (fallback when <6 exist)
+
+       Categories (used to tune each class of evidence independently):
+         scored   -- team actually scored a goal (attack evidence)
+         conceded -- team conceded a goal (defence-leakage evidence)
+         over     -- over-X-line pattern (e.g. over 2.5, under 2.5)
+         blank    -- team blanked / failed to score (no_btts, under)
+         win      -- outright wins (home dominance)
+         cs       -- clean sheet / conceded zero (no_btts defence)
+
+       Override with env, e.g.
+         OU_FREQ="scored:6:3,conceded:4:2,over:4:2,blank:4:2,win:3:2,cs:5:3"
+       scored:6:3 means "scored in 6+/6 matches, fallback 3+/3".
+    """
+    defaults = {
+        "scored":   {"full": 6, "short": 3},
+        "conceded": {"full": 4, "short": 2},
+        "over":     {"full": 4, "short": 2},
+        "blank":    {"full": 4, "short": 2},
+        "win":      {"full": 3, "short": 2},
+        "cs":       {"full": 5, "short": 3},
+        "btts_game": {"full": 3, "short": 2},
+        "nowin":    {"full": 4, "short": 2},
+    }
+    raw = os.getenv("OU_FREQ", "")
+    for pair in raw.split(","):
+        if ":" not in pair:
+            continue
+        cat, _, rest = pair.partition(":")
+        cat = cat.strip()
+        if cat not in defaults:
+            continue
+        if ":" not in rest:
+            continue
+        fs, _, ss = rest.partition(":")
+        try:
+            defaults[cat]["full"] = max(1, min(6, int(fs.strip())))
+            defaults[cat]["short"] = max(1, min(3, int(ss.strip())))
+        except ValueError:
+            pass
+    return defaults
+
+
+FREQ_CFG = _parse_freq_thresholds()
+
+
+def _parse_market_premium():
+    """Per-market 🔥 Premium thresholds. Premium should mean 'top pick within
+    THIS market', so markets with a lower entry gate (btts 0.75, away_sc 0.80)
+    get their own premium bar instead of the global 0.85 -- otherwise every
+    btts pick between its gate and 0.85 can never be Premium while over/
+    home_sc picks are Premium by construction.
+    Override with env, e.g. MARKET_PREMIUM="btts:0.82,away_sc:0.84" """
+    defaults = {"btts": 0.80, "away_sc": 0.83}
+    raw = os.getenv("MARKET_PREMIUM", "")
+    for pair in raw.split(","):
+        if ":" in pair:
+            k, _, v = pair.partition(":")
+            try:
+                defaults[k.strip()] = float(v)
+            except ValueError:
+                pass
+    return defaults
+
+
+MARKET_PREMIUM = _parse_market_premium()
+
+# Bump this string whenever rules.py logic, check sets, gates, premium tiers,
+# or the confidence formula change. It is mixed into the predict_day cache
+# signature so stale picks computed under older rules are never served.
+RULES_VERSION = os.getenv("OU_RULES_VERSION", "2026-09-24.1")
 DEFAULT_ODDS = float(os.getenv("DEFAULT_ODDS", "2.0"))    # decimal odds for EV
 KELLY_FRACTION = float(os.getenv("KELLY_FRACTION", "0.35"))
 MAX_STAKE_PCT = float(os.getenv("MAX_STAKE_PCT", "0.3"))  # % of bankroll per pick
@@ -91,6 +167,22 @@ CACHE_DISABLE = bool(os.getenv("OU_CACHE_DISABLE", ""))
 # --- storage ----------------------------------------------------------------
 DATA_DIR = os.getenv("OU_DATA_DIR", os.path.join(os.getcwd(), "data"))
 HISTORY_FILE = os.path.join(DATA_DIR, "prediction_history.json")
+
+# --- league health (caution on leagues where our patterns keep losing) --------
+# Trailing window + minimum sample before a (league, market) pair gets a
+# CAUTION tag. Cautioned picks are TAGGED, never skipped -- and never applied
+# in backtests (that would be lookahead).
+LEAGUE_HEALTH_WINDOW_DAYS = int(os.getenv("OU_LEAGUE_WINDOW_DAYS", "30"))
+LEAGUE_HEALTH_MIN_PICKS = int(os.getenv("OU_LEAGUE_MIN_PICKS", "6"))
+
+
+def _csv_set(name):
+    return {x.strip() for x in os.getenv(name, "").split(",") if x.strip()}
+
+
+LEAGUE_BLOCK = _csv_set("OU_LEAGUE_BLOCK")   # always caution, all markets
+LEAGUE_ALLOW = _csv_set("OU_LEAGUE_ALLOW")   # never auto-caution
+LEAGUE_AVOID_DISABLE = bool(os.getenv("OU_LEAGUE_AVOID_DISABLE", ""))
 
 # --- telegram (optional) -----------------------------------------------------
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")

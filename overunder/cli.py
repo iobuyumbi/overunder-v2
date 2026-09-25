@@ -92,18 +92,43 @@ def cmd_predict(args):
     mkts = _markets(args.markets)
     picks = []
     demo_bypass = {} if args.demo else None
+    # live runs TAG picks from leagues/pairs the health tracker has flagged
+    # as pattern-hostile -- caution only, never blocked
+    caution = None
+    if not args.demo and not config.LEAGUE_AVOID_DISABLE:
+        from . import leagues as lg
+        # Always recompute health fresh so settled results after the last save are
+        # included (load_health reads stale disk JSON otherwise).
+        try:
+            health = lg.compute_health()
+            lg.save_health(health)
+            print(f"[league-health] recomputed, saved -> {lg.health_path()}",
+                  file=sys.stderr)
+        except Exception as _h:
+            print(f"[league-health] recompute failed ({_h}), using disk",
+                  file=sys.stderr)
+            health = lg.load_health()
+        caution = lg.caution_sets(health)
+        if not caution[0] and not caution[1]:
+            caution = None
     for d in _date_range(args):
         try:
             fxs = prov.fixtures(d)
             print(f"predicting {len(fxs)} fixtures x {len(mkts)} markets for {d}...",
                   file=sys.stderr, flush=True)
             picks += predict_day(prov, day=d, odds=args.odds, markets=mkts,
-                                 market_min_conf=demo_bypass)
+                                 market_min_conf=demo_bypass,
+                                 league_caution=caution)
         except RuntimeError as e:
             print(f"PREDICT FAILED for {d}: {e}", file=sys.stderr)
             if getattr(args, "days", 1) == 1:
                 sys.exit(f"Diagnose with:  python -m overunder scrape-check --date {d}\n"
                          f"Or offline demo:  python -m overunder predict --demo")
+    cautioned = [p for p in picks if p.get("league_caution")]
+    if cautioned:
+        print(f"⚠ league caution on {len(cautioned)} pick(s) -- our patterns "
+              f"may not suit those matches "
+              f"(see 'python -m overunder leagues')", file=sys.stderr)
     # statarea cards only exist for ~today: tag just those, skip future days
     today_picks = [p for p in picks if p.get("date") == __import__("datetime").date.today().isoformat()]
     other_picks = [p for p in picks if p not in today_picks]
@@ -191,12 +216,65 @@ def _settle_day(prov, d, verbose=True):
     return n
 
 
+def _update_league_health(verbose=True):
+    """Recompute + persist league health after settlements; one-line summary."""
+    from . import leagues as lg
+    health = lg.compute_health()
+    path = lg.save_health(health)
+    pairs, blocked = lg.caution_sets(health)
+    if verbose:
+        msg = f"league health updated -> {path}"
+        if pairs or blocked:
+            msg += (f" | CAUTION: {len(pairs)} league+market pair(s)"
+                    + (f" + {len(blocked)} manually flagged" if blocked else ""))
+        else:
+            msg += " | nothing on the caution list"
+        print(msg)
+    return health
+
+
+def cmd_leagues(args):
+    """Show per-league track record and which league+market pairs carry a
+    pattern caution (caution only -- picks are never blocked)."""
+    from . import leagues as lg
+    health = lg.compute_health(window_days=args.window,
+                               min_picks=args.min_picks)
+    path = lg.save_health(health, window_days=args.window,
+                          min_picks=args.min_picks)
+    pairs, blocked = lg.caution_sets(health)
+    print(f"== LEAGUE HEALTH (last {args.window}d, min {args.min_picks} picks) ==")
+    print(f"saved -> {path}")
+    if not health:
+        print("  (no settled picks in window yet -- settle some days first)")
+    rows = []
+    for lgk, mkts in health.items():
+        n = sum(g["n"] for g in mkts.values())
+        w = sum(g["w"] for g in mkts.values())
+        profit = round(sum(g["profit"] for g in mkts.values()), 2)
+        worst = sorted(mkts.items(), key=lambda kv: kv[1]["profit"])
+        rows.append((profit, lgk, n, w, worst))
+    rows.sort()
+    for profit, lgk, n, w, worst in rows:
+        flag = " ⚠" if lgk in blocked else ""
+        print(f"\n  {lgk}{flag}   {n} picks {w}W-{n - w}L  {profit:+.2f}u")
+        for mk, g in worst:
+            mark = "  ⚠ CAUTION" if g["caution"] else ""
+            print(f"     {mk:<9} {g['n']:>3} picks  {g['w']}W-{g['l']}L  "
+                  f"{g['win_pct']:>5}%  {g['profit']:+.2f}u{mark}")
+    if blocked:
+        print(f"\nmanually flagged (OU_LEAGUE_BLOCK): {sorted(blocked)}")
+    if not pairs and not blocked:
+        print("\nno leagues on the caution list right now")
+
+
 def cmd_settle(args):
     prov = DemoProvider() if args.demo else _provider(False)
     prov.fresh = True   # settlement needs live scores, not the 6h cache
     if args.date:
         n = _settle_day(prov, args.date)
         print(f"settled {n} picks for {args.date}")
+        if n:
+            _update_league_health()
         return
     h = hist._load()
     dates = sorted({r["date"] for r in h["pending"]})
@@ -207,6 +285,8 @@ def cmd_settle(args):
     for d in dates:
         total += _settle_day(prov, d)
     print(f"settled {total} picks across {len(dates)} day(s)")
+    if total:
+        _update_league_health()
 
 
 def _fmt_group(name, g):
@@ -231,6 +311,7 @@ def cmd_stats(args):
     _show("BY STATAREA SIGNAL:", s.get("by_signal", {}))
     _show("BY MARKET:", s.get("by_market", {}))
     _show("BY TIER:", s.get("by_tier", {}))
+    _show("BY LEAGUE:", s.get("by_league", {}))
     print(f"pending: {s['pending']}   settled: {s['settled_total']}")
 
 
@@ -595,6 +676,14 @@ def cmd_report(args):
         picks = history_picks
         print(f"report: loaded {len(picks)} picks from history for {len(date_window)} day(s)",
               file=sys.stderr)
+        hist_mkts = {p.get("market") for p in h["pending"] + h["settled"]
+                     if p["date"] in date_set}
+        missing = [m for m in mkts if m not in hist_mkts]
+        if missing:
+            print(f"report: WARNING --markets={','.join(missing)} have ZERO history "
+                  f"picks in this window (report will be empty for those markets). "
+                  f"Run predict --markets {','.join(missing)} first.",
+                  file=sys.stderr)
     else:
         picks = []
         for d in date_window:
@@ -625,8 +714,14 @@ def cmd_report(args):
 
 
 def cmd_fetch_statarea(args):
-    st.fetch_card(args.date)
-    print("card cached")
+    try:
+        st.fetch_card(args.date)
+        print("card cached")
+    except RuntimeError as e:
+        # best-effort step in run_local.bat: warn and let the pipeline
+        # continue untagged instead of dying with a traceback
+        print(f"[statarea] fetch failed, continuing without card: {e}",
+              file=sys.stderr)
 
 
 def main(argv=None):
@@ -653,6 +748,12 @@ def main(argv=None):
     p.set_defaults(fn=cmd_settle)
     p = sub.add_parser("stats"); p.add_argument("--json", action="store_true")
     p.set_defaults(fn=cmd_stats)
+    p = sub.add_parser("leagues", help="league track record + avoid list")
+    p.add_argument("--window", type=int, default=config.LEAGUE_HEALTH_WINDOW_DAYS,
+                   help="trailing window in days (default: env OU_LEAGUE_WINDOW_DAYS=30)")
+    p.add_argument("--min-picks", type=int, default=config.LEAGUE_HEALTH_MIN_PICKS,
+                   help="min settled picks before a pair can be avoided (default 6)")
+    p.set_defaults(fn=cmd_leagues)
     p = sub.add_parser("report"); common(p)
     p.add_argument("--markets", default="over,under,btts,no_btts,home,home_sc,away_sc")
     p.add_argument("--days", type=int, default=1)

@@ -40,10 +40,11 @@ def _save(h):
 
 def record_picks(picks):
     h = _load()
-    seen = {(p["date"], p["home"], p["away"]) for p in h["pending"] + h["settled"]}
+    seen = {(p["date"], p["home"], p["away"], p.get("market"))
+            for p in h["pending"] + h["settled"]}
     added = 0
     for p in picks:
-        key = (p["date"], p["home"], p["away"])
+        key = (p["date"], p["home"], p["away"], p.get("market"))
         if key in seen:
             continue
         rec = dict(p)
@@ -132,6 +133,7 @@ def stats():
         "by_signal": _group_stats(s, lambda r: r.get("statarea_signal")),
         "by_tier": _group_stats(s, lambda r: r.get("tier")),
         "by_market": _group_stats(s, lambda r: r.get("market")),
+        "by_league": _group_stats(s, lambda r: r.get("league")),
         "pending": len(h["pending"]),
         "settled_total": len(s),
     }

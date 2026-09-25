@@ -36,6 +36,7 @@ H2H: expected result in >= half of last up-to-6 meetings; 1/1 counts;
 
 import math
 
+from .config import FREQ_CFG
 from .teams import normalize
 
 CHECK_NAMES = {
@@ -147,7 +148,8 @@ def h2h_check(home_ms, market, away_name):
     tgt = normalize(away_name)
     meetings = [m for m in home_ms
                 if m.get("opp") and normalize(m["opp"]) == tgt]
-    meetings = meetings[-6:]
+    meetings.sort(key=lambda m: m.get("date", ""), reverse=True)
+    meetings = meetings[:6]
     n = len(meetings)
     if n == 0:
         return True
@@ -155,46 +157,51 @@ def h2h_check(home_ms, market, away_name):
     return hits * 2 >= n
 
 
-def _freq4(ms, fn):
-    """Doubled frequency rule: outcome in 4+ of last 6; when fewer than 6
-    matches exist, fall back to 2+ of the last 3 (needs at least 3)."""
+def _freq_cat(cat, ms, fn):
+    """Category-tunable frequency rule.  Thresholds come from FREQ_CFG[cat]
+    via env OU_FREQ (see config._parse_freq_thresholds):
+         full  = numerator out of the last 6 (if len >= 6)
+         short = numerator out of the last 3 (if 3 <= len < 6)
+       len < 3  -> False (not enough evidence)."""
+    cfg = FREQ_CFG.get(cat, {"full": 4, "short": 2})
     n = len(ms)
     if n >= 6:
-        return sum(1 for m in ms[-6:] if fn(m)) >= 4
+        return sum(1 for m in ms[-6:] if fn(m)) >= cfg["full"]
     if n >= 3:
-        return sum(1 for m in ms[-3:] if fn(m)) >= 2
+        return sum(1 for m in ms[-3:] if fn(m)) >= cfg["short"]
     return False
+
+
+def _freq4(ms, fn):
+    """Legacy wrapper: scored-conceded-over-blank default category = 4/6, 2/3."""
+    return _freq_cat("scored", ms, fn)
 
 
 def _freq3(ms, fn):
-    """Halved frequency rule: outcome in 3+ of last 6 (or 2+ of last 3)."""
-    n = len(ms)
-    if n >= 6:
-        return sum(1 for m in ms[-6:] if fn(m)) >= 3
-    if n >= 3:
-        return sum(1 for m in ms[-3:] if fn(m)) >= 2
-    return False
+    """Legacy wrapper: win category = 3/6, 2/3."""
+    return _freq_cat("win", ms, fn)
 
 
 def _freq5(ms, fn):
-    """Tightened frequency rule: outcome in 5+ of last 6 (or 3+ of last 3).
-    Used for conceding evidence -- leakage must be near-constant."""
-    n = len(ms)
-    if n >= 6:
-        return sum(1 for m in ms[-6:] if fn(m)) >= 5
-    if n >= 3:
-        return sum(1 for m in ms[-3:] if fn(m)) >= 3
-    return False
+    """Legacy wrapper: clean-sheet category = 5/6, 3/3."""
+    return _freq_cat("cs", ms, fn)
 
 
 def _strong_unbeaten(ms):
-    """Acceptable home form: 4+ wins in 6 outright, OR unbeaten in 5 of 6
-    when wins come with draws (a draw-heavy host still qualifies)."""
+    """Acceptable home form: 4+ wins in 6 outright (2/3rds), OR unbeaten in
+    5 of 6 (draws still count) when wins come with draws."""
     if not ms:
         return False
-    wins = _rate(ms, lambda m: m["gf"] > m["ga"])
-    unbeaten = _rate(ms, lambda m: m["gf"] >= m["ga"])
-    return wins >= 4 / 6 or unbeaten >= 5 / 6
+    wins_n = sum(1 for m in ms if m["gf"] > m["ga"])
+    unbeaten_n = sum(1 for m in ms if m["gf"] >= m["ga"])
+    n = len(ms)
+    if n >= 6:
+        return wins_n >= 4 or unbeaten_n >= 5
+    if n >= 4:
+        win_thr = max(1, round(4 * n / 6))
+        unb_thr = max(1, round(5 * n / 6))
+        return wins_n >= win_thr or unbeaten_n >= unb_thr
+    return False
 
 
 # Base checks that are irrelevant -- or actively harmful -- evidence for a
@@ -242,12 +249,12 @@ def _negative_checks(home_ms, away_ms, check_set, away_name, h2h_market):
         under = lambda m: _tot(m) <= 2.5
         checks.update({
             "H1u": _low_volume_check(h3h, "gf", 4, 1.0),
-            "H2u": _freq4(h6H, under),
+            "H2u": _freq_cat("over", h6H, under),
             "H3u": _rate(h6, under) >= 0.5,
             "H10u": _low_volume_check(h3h, "ga", 2, 0.7),
             "A1u": _low_volume_check(a3a, "gf", 4, 1.0),
-            "A3u": _freq4(a6A, lambda m: m["gf"] == 0),
-            "A4u": _freq4(a6A, under),
+            "A3u": _freq_cat("blank", a6A, lambda m: m["gf"] == 0),
+            "A4u": _freq_cat("over", a6A, under),
             "A5u": _rate(a6, under) >= 0.5,
             "A11u": _low_volume_check(a3a, "ga", 2, 0.7),
         })
@@ -256,15 +263,15 @@ def _negative_checks(home_ms, away_ms, check_set, away_name, h2h_market):
         checks.update({
             "H4n": sum(1 for m in h6H if btts(m)) <= 2,
             "H5n": sum(1 for m in h6 if btts(m)) <= 2,
-            "H6n": _freq4(h6H, lambda m: m["gf"] == 0),
-            "H8n": _freq5(h6H, lambda m: m["ga"] == 0),
-            "H9n": _freq5(h6, lambda m: m["ga"] == 0),
-            "A3n": _freq4(a6A, lambda m: m["gf"] == 0),
+            "H6n": _freq_cat("blank", h6H, lambda m: m["gf"] == 0),
+            "H8n": _freq_cat("cs", h6H, lambda m: m["ga"] == 0),
+            "H9n": _freq_cat("cs", h6, lambda m: m["ga"] == 0),
+            "A3n": _freq_cat("blank", a6A, lambda m: m["gf"] == 0),
             "A6n": sum(1 for m in a6A if btts(m)) <= 2,
             "A7n": sum(1 for m in a6 if btts(m)) <= 2,
-            "A8n": _freq4(a6, lambda m: m["gf"] == 0),
-            "A9n": _freq5(a6A, lambda m: m["ga"] == 0),
-            "A10n": _freq5(a6, lambda m: m["ga"] == 0),
+            "A8n": _freq_cat("blank", a6, lambda m: m["gf"] == 0),
+            "A9n": _freq_cat("cs", a6A, lambda m: m["ga"] == 0),
+            "A10n": _freq_cat("cs", a6, lambda m: m["ga"] == 0),
             "DOM": (_rate(h6, lambda m: m["ga"] == 0) >= 0.5 or
                     _rate(a6, lambda m: m["gf"] == 0) >= 0.5),
         })
@@ -290,21 +297,21 @@ def run_checks(home_ms, away_ms, market=None, home_name="", away_name=""):
 
     checks = {
         "H1": _volume_check(h3h, "gf"),
-        "H2": _freq4(h6H, over),
+        "H2": _freq_cat("over", h6H, over),
         "H3": _rate(h6, over) >= 0.5,
         "H4": _rate(h6H, btts) >= 0.5,
         "H5": _rate(h6, btts) >= 0.5,
-        "H6": _freq4(h6H, lambda m: m["gf"] > 0),
-        "H7": _freq4(h6, lambda m: m["gf"] > 0),
-        "H8": _freq4(h6H, lambda m: m["ga"] > 0),
+        "H6": _freq_cat("scored", h6H, lambda m: m["gf"] > 0),
+        "H7": _freq_cat("scored", h6, lambda m: m["gf"] > 0),
+        "H8": _freq_cat("conceded", h6H, lambda m: m["ga"] > 0),
         "H10": _volume_check(h3h, "ga"),
         "A1": _volume_check(a3a, "gf"),
-        "A3": _freq4(a6A, lambda m: m["gf"] > 0),
-        "A4": _freq4(a6A, over),
+        "A3": _freq_cat("scored", a6A, lambda m: m["gf"] > 0),
+        "A4": _freq_cat("over", a6A, over),
         "A5": _rate(a6, over) >= 0.5,
         "A6": _rate(a6A, btts) >= 0.5,
         "A7": _rate(a6, btts) >= 0.5,
-        "A9": _freq4(a6A, lambda m: m["ga"] > 0),
+        "A9": _freq_cat("conceded", a6A, lambda m: m["ga"] > 0),
         "A11": _volume_check(a3a, "ga"),
         "S6": len(home_ms) >= 4 and len(away_ms) >= 4,
     }
@@ -317,59 +324,59 @@ def run_checks(home_ms, away_ms, market=None, home_name="", away_name=""):
         # attack-vs-defence complementarity + volatile sides; A8 completes
         # the away-scoring picture for the away-attack vs home-defence pair
         checks.update({
-            "A8": _freq4(a6, lambda m: m["gf"] > 0),
-            "HB": sum(1 for m in h6H if m["gf"] > 0 and m["ga"] > 0) >= 3,
-            "AB": sum(1 for m in a6A if m["gf"] > 0 and m["ga"] > 0) >= 3,
+            "A8": _freq_cat("scored", a6, lambda m: m["gf"] > 0),
+            "HB": _freq_cat("btts_game", h6H, btts),
+            "AB": _freq_cat("btts_game", a6A, btts),
         })
     elif market == "btts":
         # btts = home_sc U away_sc -- the full union:
-        #   * home attack + away leakage (home_sc profile: H6/H7 4/6 + A9/A11/A12)
-        #   * away attack + home leakage (away_sc profile: A3/A13 4/6 + H8/H10/H12)
-        # Base checks already provide A9/A11 and H8/H10 via _freq4; we add the
-        # venue+overall conceded rates (A12/H12 at 4/6) and explicitly compute
-        # overall scoring (H7/A13) using the same _freq4 bar as venue checks.
+        #   * home attack + away leakage (home_sc profile: H6/H7 freq + A9/A11/A12)
+        #   * away attack + home leakage (away_sc profile: A3/A13 freq + H8/H10/H12)
+        # Base checks already provide A9/A11 and H8/H10; we add the venue+overall
+        # conceded rates (A12/H12 via conceded category) and overall scoring
+        # (H7/A13 via scored category).
         checks.update({
-            "H6": _freq4(h6H, lambda m: m["gf"] > 0),
-            "H7": _freq4(h6, lambda m: m["gf"] > 0),
-            "A3": _freq4(a6A, lambda m: m["gf"] > 0),
-            "A13": _freq4(a6, lambda m: m["gf"] > 0),
-            "A12": sum(1 for m in a6 if m["ga"] > 0) >= 4,
-            "H12": sum(1 for m in h6 if m["ga"] > 0) >= 4,
+            "H6": _freq_cat("scored", h6H, lambda m: m["gf"] > 0),
+            "H7": _freq_cat("scored", h6, lambda m: m["gf"] > 0),
+            "A3": _freq_cat("scored", a6A, lambda m: m["gf"] > 0),
+            "A13": _freq_cat("scored", a6, lambda m: m["gf"] > 0),
+            "A12": _freq_cat("conceded", a6, lambda m: m["ga"] > 0),
+            "H12": _freq_cat("conceded", h6, lambda m: m["ga"] > 0),
         })
     elif market == "home":
         # dominance + acceptable form + away no-win + leaks
         checks.update({
-            "A12": sum(1 for m in a6 if m["ga"] > 0) >= 4,
+            "A12": _freq_cat("conceded", a6, lambda m: m["ga"] > 0),
             "H14": _strong_unbeaten(h6H),
             "H15": _strong_unbeaten(h6),
-            "H16": _freq3(h6H, lambda m: m["gf"] > m["ga"]),   # wins 3+/6 home
-            "A16": _freq4(a6A, lambda m: m["gf"] <= m["ga"]),  # away loses OR draws away
+            "H16": _freq_cat("win", h6H, lambda m: m["gf"] > m["ga"]),
+            "A16": _freq_cat("nowin", a6A, lambda m: m["gf"] <= m["ga"]),
         })
     elif market == "home_sc":
-        # home_sc: home attack (_freq4 4/6) + AWAY concedes (venue 4/6 via base A9,
-        # venue volume via A11, plus overall A12 at 4/6).
-        checks["A12"] = sum(1 for m in a6 if m["ga"] > 0) >= 4
-        checks["H6"] = _freq4(h6H, lambda m: m["gf"] > 0)
-        checks["H7"] = _freq4(h6, lambda m: m["gf"] > 0)
+        # home_sc: home attack (scored freq) + AWAY concedes (venue freq via base A9,
+        # venue volume via A11, plus overall A12 via conceded category).
+        checks["A12"] = _freq_cat("conceded", a6, lambda m: m["ga"] > 0)
+        checks["H6"] = _freq_cat("scored", h6H, lambda m: m["gf"] > 0)
+        checks["H7"] = _freq_cat("scored", h6, lambda m: m["gf"] > 0)
     elif market == "away_sc":
-        # away_sc: away attack (_freq4 4/6) + HOME concedes (venue 4/6 via base H8,
-        # venue volume via H10, plus overall H12 at 4/6).
+        # away_sc: away attack (scored freq) + HOME concedes (venue freq via base H8,
+        # venue volume via H10, plus overall H12 via conceded category).
         checks.update({
-            "A3": _freq4(a6A, lambda m: m["gf"] > 0),
-            "A13": _freq4(a6, lambda m: m["gf"] > 0),
-            "H12": sum(1 for m in h6 if m["ga"] > 0) >= 4,
+            "A3": _freq_cat("scored", a6A, lambda m: m["gf"] > 0),
+            "A13": _freq_cat("scored", a6, lambda m: m["gf"] > 0),
+            "H12": _freq_cat("conceded", h6, lambda m: m["ga"] > 0),
         })
     elif market == "home_dw":
         # home's evidence but draw-friendly: winless (not loss-heavy) away
         checks.update({
-            "A12": sum(1 for m in a6 if m["ga"] > 0) >= 4,
+            "A12": _freq_cat("conceded", a6, lambda m: m["ga"] > 0),
             "H14": _strong_unbeaten(h6H),
             "H15": _strong_unbeaten(h6),
             "H17": _low_volume_check(h3h, "ga", 2, 0.7),
-            "A14": _freq4(a6A, lambda m: m["gf"] <= m["ga"]),  # winless away
-            "A15": _freq4(a6, lambda m: m["gf"] <= m["ga"]),   # winless overall
+            "A14": _freq_cat("nowin", a6A, lambda m: m["gf"] <= m["ga"]),
+            "A15": _freq_cat("nowin", a6, lambda m: m["gf"] <= m["ga"]),
             "A17": _low_volume_check(a3a, "gf", 4, 1.0),
-            "A18": _freq4(a6A, lambda m: m["gf"] == 0),
+            "A18": _freq_cat("blank", a6A, lambda m: m["gf"] == 0),
         })
     if market:
         checks["H2H"] = h2h_check(home_ms, market, away_name)
