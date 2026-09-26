@@ -73,7 +73,7 @@ def _parse_freq_thresholds():
     """
     defaults = {
         "scored":   {"full": 6, "short": 3},
-        "conceded": {"full": 4, "short": 2},
+        "conceded": {"full": 6, "short": 3},
         "over":     {"full": 4, "short": 2},
         "blank":    {"full": 4, "short": 2},
         "win":      {"full": 3, "short": 2},
@@ -127,7 +127,7 @@ MARKET_PREMIUM = _parse_market_premium()
 # Bump this string whenever rules.py logic, check sets, gates, premium tiers,
 # or the confidence formula change. It is mixed into the predict_day cache
 # signature so stale picks computed under older rules are never served.
-RULES_VERSION = os.getenv("OU_RULES_VERSION", "2026-09-24.1")
+RULES_VERSION = os.getenv("OU_RULES_VERSION", "2026-09-27.1")
 DEFAULT_ODDS = float(os.getenv("DEFAULT_ODDS", "2.0"))    # decimal odds for EV
 KELLY_FRACTION = float(os.getenv("KELLY_FRACTION", "0.35"))
 MAX_STAKE_PCT = float(os.getenv("MAX_STAKE_PCT", "0.3"))  # % of bankroll per pick
