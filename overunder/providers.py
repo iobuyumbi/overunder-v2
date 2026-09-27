@@ -25,7 +25,7 @@ import requests
 
 from .config import (CACHE_DIR, DATA_DIR, HTML_TTL_TEAM_HOURS,
                      HTML_TTL_FIXTURE_HOURS, TEAM_CACHE_TTL_HOURS,
-                     CACHE_DISABLE)
+                     CACHE_DISABLE, HTTP_TIMEOUT_SEC, HTTP_MAX_RETRIES)
 from .teams import normalize
 
 HISTORY_DB = os.path.join(DATA_DIR, "history_db.json")
@@ -280,7 +280,7 @@ class SoccerbaseProvider:
             with open(path, encoding="utf-8", errors="replace") as f:
                 return f.read()
         last_err = None
-        for attempt in range(3):
+        for attempt in range(HTTP_MAX_RETRIES):
             try:
                 req_url = url
                 if fresh:
@@ -289,7 +289,7 @@ class SoccerbaseProvider:
                     # fresh render with the latest posted scores
                     sep = "&" if "?" in url else "?"
                     req_url = f"{url}{sep}_cb={int(time.time())}"
-                r = self._session.get(req_url, timeout=30)
+                r = self._session.get(req_url, timeout=HTTP_TIMEOUT_SEC)
                 print(f"[soccerbase]   -> HTTP {r.status_code}, {len(r.text)} bytes",
                       file=_sys.stderr, flush=True)
                 if r.ok and len(r.text) > 1000:

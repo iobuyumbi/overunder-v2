@@ -176,19 +176,42 @@ def cmd_compare(args):
 def _classify_pending(recs, rows):
     """Why are these picks still pending? Split into 'awaiting' (fixture is on
     the day page but has no score yet) and 'uncovered' (neither team appears
-    on the page at all -> source doesn't list this league/fixture)."""
+    on the page at all -> source doesn't list this league/fixture).
+
+    Returns are DEDUPLICATED per (home, away) fixture: each unique fixture
+    appears once with a `markets` list so 4 picks for the same match do not
+    produce 4 identical report lines.  Raw market-level recs are preserved
+    under the '_picks' key for any caller that needs settlement-level detail.
+    """
     from .teams import normalize as _n
     page_teams = set()
     for r in rows:
         page_teams.add(_n(r["home"]))
         page_teams.add(_n(r["away"]))
+
+    def _dedup(bucket):
+        seen, out = {}, []
+        for rec in bucket:
+            k = (_n(rec["home"]), _n(rec["away"]))
+            if k not in seen:
+                seen[k] = {
+                    "home": rec["home"], "away": rec["away"],
+                    "date": rec.get("date"), "markets": [rec.get("market", "?")],
+                    "_picks": [rec],
+                }
+                out.append(seen[k])
+            else:
+                seen[k]["markets"].append(rec.get("market", "?"))
+                seen[k]["_picks"].append(rec)
+        return out
+
     awaiting, uncovered = [], []
     for rec in recs:
         if _n(rec["home"]) in page_teams or _n(rec["away"]) in page_teams:
             awaiting.append(rec)
         else:
             uncovered.append(rec)
-    return awaiting, uncovered
+    return _dedup(awaiting), _dedup(uncovered)
 
 
 def _settle_day(prov, d, verbose=True):
@@ -207,11 +230,16 @@ def _settle_day(prov, d, verbose=True):
     if verbose:
         msg = f"  {d}: settled {n}"
         if awaiting:
-            msg += f" | {len(awaiting)} awaiting result (on page, no score yet)"
+            picks_n = sum(len(r["_picks"]) for r in awaiting)
+            msg += f" | {len(awaiting)} fixtures ({picks_n} picks) awaiting result (on page, no score yet)"
         if uncovered:
-            names = "; ".join(f"{r['home']} vs {r['away']}" for r in uncovered[:5])
-            more = f" (+{len(uncovered)-5} more)" if len(uncovered) > 5 else ""
-            msg += f" | {len(uncovered)} not covered by soccerbase: {names}{more}"
+            picks_n = sum(len(r["_picks"]) for r in uncovered)
+            def _fmt(r):
+                mkts = ",".join(sorted(set(r["markets"])))
+                return f"{r['home']} vs {r['away']} [{mkts}]"
+            names = "; ".join(_fmt(r) for r in uncovered[:5])
+            more = f" (+{len(uncovered)-5} more fixtures)" if len(uncovered) > 5 else ""
+            msg += f" | {len(uncovered)} fixtures ({picks_n} picks) not covered by soccerbase: {names}{more}"
         print(msg)
     return n
 
@@ -680,10 +708,17 @@ def cmd_report(args):
                      if p["date"] in date_set}
         missing = [m for m in mkts if m not in hist_mkts]
         if missing:
-            print(f"report: WARNING --markets={','.join(missing)} have ZERO history "
-                  f"picks in this window (report will be empty for those markets). "
-                  f"Run predict --markets {','.join(missing)} first.",
-                  file=sys.stderr)
+            from .config import MARKET_MIN_CONF as _mmc
+            warn = [m for m in missing if (_mmc.get(m, 0.0) < 0.99)]
+            disabled = [m for m in missing if (_mmc.get(m, 0.0) >= 0.99)]
+            if warn:
+                print(f"report: WARNING --markets={','.join(warn)} have ZERO history "
+                      f"picks in this window (report will be empty for those markets). "
+                      f"Run predict --markets {','.join(warn)} first.",
+                      file=sys.stderr)
+            if disabled:
+                print(f"report: markets={','.join(disabled)} skipped from picks by gate >=0.99 (effectively disabled) — no history picks expected.",
+                      file=sys.stderr)
     else:
         picks = []
         for d in date_window:
@@ -755,7 +790,7 @@ def main(argv=None):
                    help="min settled picks before a pair can be avoided (default 6)")
     p.set_defaults(fn=cmd_leagues)
     p = sub.add_parser("report"); common(p)
-    p.add_argument("--markets", default="over,under,btts,no_btts,home,home_sc,away_sc")
+    p.add_argument("--markets", default="over,btts,home,home_sc,away_sc")
     p.add_argument("--days", type=int, default=1)
     p.set_defaults(fn=cmd_report)
     p = sub.add_parser("scrape-check"); p.add_argument("--date", default=None)
@@ -778,7 +813,7 @@ def main(argv=None):
     p = sub.add_parser("verify"); p.add_argument("--n", type=int, default=50)
     p.set_defaults(fn=cmd_verify)
     p = sub.add_parser("backtest"); p.add_argument("--days", type=int, default=30)
-    p.add_argument("--markets", default="over,under,btts,no_btts,home,home_sc,away_sc")
+    p.add_argument("--markets", default="over,btts,home,home_sc,away_sc")
     p.add_argument("--odds", type=float, default=config.DEFAULT_ODDS)
     p.add_argument("--min-conf", type=float, default=config.O25_MIN_CONFIDENCE)
     p.add_argument("--verbose", action="store_true", help="print every replayed pick")

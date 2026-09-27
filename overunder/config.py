@@ -163,6 +163,10 @@ TEAM_CACHE_TTL_HOURS  = int(os.getenv("OU_TEAM_CACHE_TTL", "168"))   # 7 days
 PREDICT_CACHE_TTL_HOURS = int(os.getenv("OU_PREDICT_CACHE_TTL", str(HTML_TTL_FIXTURE_HOURS)))
 # Disable caches entirely: set OU_CACHE_DISABLE=1 (settlement/verify/live need fresh)
 CACHE_DISABLE = bool(os.getenv("OU_CACHE_DISABLE", ""))
+# HTTP read timeout (seconds) and total retries for soccerbase/statarea fetches.
+# Settlement days (weekend heavy traffic) can exceed the default 30s read timeout.
+HTTP_TIMEOUT_SEC = int(os.getenv("OU_HTTP_TIMEOUT", "60"))
+HTTP_MAX_RETRIES = int(os.getenv("OU_HTTP_RETRIES", "4"))
 
 # --- storage ----------------------------------------------------------------
 DATA_DIR = os.getenv("OU_DATA_DIR", os.path.join(os.getcwd(), "data"))
