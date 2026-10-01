@@ -10,7 +10,7 @@ also exposed for inspection.  Gates come from config.MARKET_MIN_CONF.
 One engine, one report, one settlement path."""
 
 from .config import (DEFAULT_ODDS, KELLY_FRACTION, MARKET_MIN_CONF, MAX_STAKE_PCT,
-                     O25_MIN_CONFIDENCE, PREMIUM_TIER, MARKET_PREMIUM,
+                     O25_MIN_CONFIDENCE, PREMIUM_TIER, MARKET_PREMIUM, MARKET_SOLID,
                      RULES_VERSION, CACHE_DIR, FREQ_CFG,
                      LEAGUE_AVG_HOME_GOALS, LEAGUE_AVG_AWAY_GOALS,
                      PREDICT_CACHE_TTL_HOURS, CACHE_DISABLE)
@@ -43,12 +43,11 @@ CORE_CHECKS = {
                 "A9", "A12", "A16", "H14", "H15", "H2H"],
     "home_sc": ["H6", "H7", "S6", "A9", "A12", "H2H"],
     "away_sc": ["A3", "A13", "S6", "H8", "H12", "H2H"],
-    # safer lines inherit their parent market's evidence
-    "over15":  ["H1", "H2", "H3", "A1", "A3", "A4", "A5", "A8", "H10", "A11", "H2H"],
+    "over15":  ["H2", "H3", "A3", "A4", "A5", "A8", "HB", "AB", "H2H"],
     "under35": ["H1u", "H2u", "H3u", "A1u", "A3u", "A4u", "A5u",
                 "H10u", "A11u", "H2H"],
-    "home_dw": ["H1", "H6", "H7", "H17", "A9", "A12", "A17", "A18",
-                "H14", "H15", "A14", "A15", "H2H"],
+    "home_dw": ["H6", "H7", "A9", "A12",
+                "H14", "H15", "A14", "A15", "A17", "A18", "H2H"],
 }
 
 
@@ -149,13 +148,14 @@ def predict_day(provider, day=None, markets=("over",), odds=DEFAULT_ODDS,
             else tuple(odds) if isinstance(odds, (list, tuple)) else (odds,)
         mmc_sig = tuple(sorted(mmc.items()))
         prem_sig = tuple(sorted(MARKET_PREMIUM.items()))
+        solid_sig = tuple(sorted(MARKET_SOLID.items()))
         freq_sig = tuple(sorted((k, v["full"], v["short"])
                                 for k, v in FREQ_CFG.items()))
         tunables_sig = (PREMIUM_TIER, KELLY_FRACTION, MAX_STAKE_PCT,
                         LEAGUE_AVG_HOME_GOALS, LEAGUE_AVG_AWAY_GOALS,
                         DEFAULT_ODDS)
         cache_key = (day_actual, fx_sig, mkts_sig, odds_sig, min_conf, mmc_sig,
-                     prem_sig, freq_sig, tunables_sig, RULES_VERSION, caution_sig,
+                     prem_sig, solid_sig, freq_sig, tunables_sig, RULES_VERSION, caution_sig,
                      type(provider).__name__)
         cache_path = os.path.join(CACHE_DIR, f"predict_day_{day_actual}.json")
         ttl = PREDICT_CACHE_TTL_HOURS * 3600
@@ -194,7 +194,15 @@ def predict_day(provider, day=None, markets=("over",), odds=DEFAULT_ODDS,
             except Exception:
                 continue
             thr = mmc.get(mkt) or min_conf
-            if p["confidence"] >= thr:
+            # Solid filter is ONLY active in production mode, meaning the
+            # caller did NOT pass an explicit market_min_conf override
+            # (empty dict = demo/backtest flat-gate; custom dict = per-market
+            # experiment where caller's thr is already the intended floor).
+            if market_min_conf is None:
+                solid_thr = MARKET_SOLID.get(mkt, thr)
+            else:
+                solid_thr = thr
+            if p["confidence"] >= solid_thr:
                 if league_caution:
                     from .leagues import league_key
                     pair_stats, blocked = league_caution

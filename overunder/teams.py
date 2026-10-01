@@ -39,7 +39,9 @@ ALIASES = {
 
 
 def normalize(name):
-    n = unicodedata.normalize("NFKD", str(name)).encode("ascii", "ignore").decode()
+    import html as _html
+    n = _html.unescape(str(name))   # "&amp;" -> "&" before char stripping
+    n = unicodedata.normalize("NFKD", n).encode("ascii", "ignore").decode()
     n = re.sub(r"[^a-z0-9 ]", " ", n.lower())
     n = re.sub(r"\s+", " ", n).strip()
     n = re.sub(r"^(?:" + "|".join(PREFIXES) + r") ", "", n).strip()

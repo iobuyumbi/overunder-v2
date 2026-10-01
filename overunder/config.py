@@ -6,17 +6,32 @@ import os
 
 def _load_dotenv():
     """Load KEY=VALUE pairs from a local .env (cwd, then package root).
-    Real environment variables always win. .env is gitignored -- never commit it."""
+    Real environment variables always win. .env is gitignored -- never commit it.
+
+    Non-empty, non-comment lines without an '=' are suspicious (a human note that
+    looks like it was meant to be a setting, e.g. "Strict 6/6"). Emit a warning
+    to stderr instead of silently skipping them so the user catches typos fast.
+    """
+    import sys as _sys
     for base in (os.getcwd(), os.path.dirname(os.path.abspath(__file__))):
         path = os.path.join(base, ".env")
         if not os.path.exists(path):
             continue
         with open(path, encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith("#") or "=" not in line:
+            for lineno, line in enumerate(f, 1):
+                raw = line.rstrip("\n").rstrip("\r")
+                stripped = raw.strip()
+                if not stripped or stripped.startswith("#"):
                     continue
-                k, _, v = line.partition("=")
+                if "=" not in stripped:
+                    print(
+                        f"[config] WARNING .env {os.path.basename(path)} L{lineno}: "
+                        f"line skipped (no '=' found, not a comment): "
+                        f"{raw!r}",
+                        file=_sys.stderr,
+                    )
+                    continue
+                k, _, v = stripped.partition("=")
                 k, v = k.strip(), v.strip().strip('"').strip("'")
                 os.environ.setdefault(k, v)
         break
@@ -66,14 +81,18 @@ def _parse_freq_thresholds():
          blank    -- team blanked / failed to score (no_btts, under)
          win      -- outright wins (home dominance)
          cs       -- clean sheet / conceded zero (no_btts defence)
+         btts_game -- both teams scored in the same game (volatile sides)
+         nowin    -- team failed to win (drew or lost; away form)
 
-       Override with env, e.g.
-         OU_FREQ="scored:6:3,conceded:4:2,over:4:2,blank:4:2,win:3:2,cs:5:3"
-       scored:6:3 means "scored in 6+/6 matches, fallback 3+/3".
+       Override with env, e.g. (4/6 relaxed, 5/6 medium, 6/6 strict):
+         OU_FREQ="scored:4:2,conceded:4:2,over:4:2,blank:4:2,win:3:2,cs:5:3"   -- relaxed (default)
+         OU_FREQ="scored:5:3,conceded:5:3,over:4:2,blank:4:2,win:3:2,cs:5:3"   -- medium
+         OU_FREQ="scored:6:3,conceded:6:3,over:4:2,blank:4:2,win:3:2,cs:5:3"   -- strict (cleanest, fewest picks)
+       scored:4:2 means "scored in 4+/6 matches, fallback 2+/3 when <6 exist".
     """
     defaults = {
-        "scored":   {"full": 6, "short": 3},
-        "conceded": {"full": 6, "short": 3},
+        "scored":   {"full": 4, "short": 2},
+        "conceded": {"full": 4, "short": 2},
         "over":     {"full": 4, "short": 2},
         "blank":    {"full": 4, "short": 2},
         "win":      {"full": 3, "short": 2},
@@ -104,13 +123,28 @@ FREQ_CFG = _parse_freq_thresholds()
 
 
 def _parse_market_premium():
-    """Per-market 🔥 Premium thresholds. Premium should mean 'top pick within
-    THIS market', so markets with a lower entry gate (btts 0.75, away_sc 0.80)
-    get their own premium bar instead of the global 0.85 -- otherwise every
-    btts pick between its gate and 0.85 can never be Premium while over/
-    home_sc picks are Premium by construction.
-    Override with env, e.g. MARKET_PREMIUM="btts:0.82,away_sc:0.84" """
-    defaults = {"btts": 0.80, "away_sc": 0.83}
+    """Per-market 🔥 Premium thresholds. Premium means 'top pick within THIS
+    market', so EVERY market must have its Premium bar ABOVE its entry gate
+    -- otherwise every qualified pick is Premium by construction and Solid
+    can never appear in that market.
+
+    Default: Premium = gate + 3pp (if gate ≤ 0.96, otherwise no room).
+    Env override:  MARKET_PREMIUM="btts:0.80,away_sc:0.83,over:0.88"
+    """
+    defaults = {}
+    for mkt, gate in MARKET_MIN_CONF.items():
+        # Only 1-3 markets have explicit legacy overrides (btts 0.80 had
+        # historical win-rate justification).  Remaining markets are
+        # synthesised gate + 3pp so EVERY market has a 3pp Premium lead.
+        legacy = {"btts": 0.80, "away_sc": 0.83}
+        if mkt in legacy:
+            defaults[mkt] = legacy[mkt]
+        elif gate <= 0.96:
+            defaults[mkt] = round(gate + 0.03, 3)
+        else:
+            # Gates at/above 0.97 (under/no_btts effectively disabled)
+            # have no headroom; Premium bar equals gate (no Solid possible).
+            defaults[mkt] = gate
     raw = os.getenv("MARKET_PREMIUM", "")
     for pair in raw.split(","):
         if ":" in pair:
@@ -124,10 +158,50 @@ def _parse_market_premium():
 
 MARKET_PREMIUM = _parse_market_premium()
 
+
+def _parse_market_solid():
+    """Per-market ✅ Solid MINIMUM bar (below this, even if you pass the
+    entry MARKET_MIN_CONF gate → you are NOT picked at all).
+
+    Intuition: the entry gate was just 'not obviously wrong' but in practice
+    the whole big grey zone between gate and Solid bar drags portfolio win
+    rates.  Only Premium (conf >= MARKET_PREMIUM) OR the top-2pp just below
+    Premium qualify as Solid; everything between gate and Solid bar is
+    rejected → 'Solid only in a few matches'.
+
+    Markets where MARKET_PREMIUM (effective) <= MARKET_MIN_CONF have no
+    Solid band at all -- every qualifying pick IS Premium, so Solid bar is
+    set equal to Premium (the zone between the two is empty).
+
+    Override with env MARKET_SOLID="btts:0.78,away_sc:0.81"
+    """
+    all_markets = set(MARKET_MIN_CONF.keys()) | set(MARKET_PREMIUM.keys())
+    defaults = {}
+    for mkt in all_markets:
+        prem_eff = MARKET_PREMIUM.get(mkt, PREMIUM_TIER)  # same effective bar as build_pick
+        gate = MARKET_MIN_CONF.get(mkt, 0.0)
+        # Solid bar defaults to max(gate, prem_eff - 0.02): narrow 2pp band
+        # just below Premium.  If prem_eff <= gate (no grey zone exists for
+        # this market) then Solid bar == prem_eff, meaning no Solid picks
+        # are ever produced for that market.
+        defaults[mkt] = max(gate, round(prem_eff - 0.02, 3))
+    raw = os.getenv("MARKET_SOLID", "")
+    for pair in raw.split(","):
+        if ":" in pair:
+            k, _, v = pair.partition(":")
+            try:
+                defaults[k.strip()] = float(v)
+            except ValueError:
+                pass
+    return defaults
+
+
+MARKET_SOLID = _parse_market_solid()
+
 # Bump this string whenever rules.py logic, check sets, gates, premium tiers,
 # or the confidence formula change. It is mixed into the predict_day cache
 # signature so stale picks computed under older rules are never served.
-RULES_VERSION = os.getenv("OU_RULES_VERSION", "2026-09-27.1")
+RULES_VERSION = os.getenv("OU_RULES_VERSION", "2026-10-01.1-scored-4of6")
 DEFAULT_ODDS = float(os.getenv("DEFAULT_ODDS", "2.0"))    # decimal odds for EV
 KELLY_FRACTION = float(os.getenv("KELLY_FRACTION", "0.35"))
 MAX_STAKE_PCT = float(os.getenv("MAX_STAKE_PCT", "0.3"))  # % of bankroll per pick

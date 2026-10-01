@@ -7,6 +7,7 @@ import time
 import uuid
 
 from .config import HISTORY_FILE
+from .teams import normalize as _norm
 
 
 def _load():
@@ -38,23 +39,60 @@ def _save(h):
     os.replace(tmp, HISTORY_FILE)
 
 
+def _rec_key(rec):
+    """Deduplication key for a history record/prediction pick.
+
+    Uses NORMALIZED team names so spelling variations ('Arsenal' vs
+    'Arsenal FC') never create duplicate history rows.  Settled picks are
+    keyed identically to pending picks so the two buckets stay in sync.
+    """
+    return (rec["date"], _norm(rec["home"]), _norm(rec["away"]),
+            rec.get("market"))
+
+
 def record_picks(picks):
+    """Record a new batch of predictions.
+
+    DEDUP RULES (per key = date + norm(home) + norm(away) + market):
+      - If a matching pick is already in SETTLED: skip (the match is done,
+        we already have a profit/loss; re-adding it would double-count it
+        in the ROI stats and resettle it to P on every settle pass).
+      - If a matching pick is already in PENDING: REPLACE it with the new
+        compute.  Pending picks are never final -- thresholds, OU_FREQ,
+        league_health, or RULES_VERSION may have changed between runs;
+        the freshest confidence/checks/tier always wins.
+      - No match in either bucket: append as a fresh pending pick.
+    """
     h = _load()
-    seen = {(p["date"], p["home"], p["away"], p.get("market"))
-            for p in h["pending"] + h["settled"]}
+    settled_keys = {_rec_key(p) for p in h["settled"]}
+    pending_by_key = {_rec_key(p): i for i, p in enumerate(h["pending"])}
     added = 0
+    replaced = 0
+    now = time.strftime("%Y-%m-%d %H:%M:%S")
     for p in picks:
-        key = (p["date"], p["home"], p["away"], p.get("market"))
-        if key in seen:
+        key = _rec_key(p)
+        if key in settled_keys:
             continue
         rec = dict(p)
-        rec["id"] = uuid.uuid4().hex[:12]
-        rec["recorded_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
+        if key in pending_by_key:
+            old_id = h["pending"][pending_by_key[key]].get("id")
+            if old_id:
+                rec["id"] = old_id
+            else:
+                rec["id"] = uuid.uuid4().hex[:12]
+            h["pending"][pending_by_key[key]] = rec
+            replaced += 1
+        else:
+            rec["id"] = uuid.uuid4().hex[:12]
+            h["pending"].append(rec)
+            added += 1
+        rec["recorded_at"] = now
         rec["result"] = None
         rec["profit"] = None
-        h["pending"].append(rec)
-        added += 1
     _save(h)
+    if replaced:
+        print(f"[history] refreshed {replaced} pending pick(s) in-place "
+              f"(newer compute on same fixture)", file=sys.stderr)
     return added
 
 

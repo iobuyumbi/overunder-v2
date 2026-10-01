@@ -31,7 +31,7 @@ def _day_label(d_iso, today_iso=None):
     return f"📅 {d_iso}"
 
 
-def render_report(picks, day=None, title="Over / Under 2.5 + BTTS + Home",
+def render_report(picks, day=None, title="Over2.5 + Over1.5 + BTTS + Home/DC",
                   day_diagnostics=None):
     """Render the VIP report.
 
@@ -43,11 +43,11 @@ def render_report(picks, day=None, title="Over / Under 2.5 + BTTS + Home",
                         "fixtures": N, "qualified": N}} dict for per-day counts
     """
     lines = []
-    bar = "═" * 46
-    lines.append("║       ♟  VIP · DEEP ANALYSIS REPORT        ║")
+    bar = "═" * 50
+    lines.append("║         ♟  VIP · DEEP ANALYSIS REPORT          ║")
     lines.append(f"╠{bar}╣")
-    lines.append(f"║  Channel: {title[:33]:<33}║")
-    lines.append("║  Window: upcoming fixtures                 ║")
+    lines.append(f"║  Channel: {title[:37]:<37}║")
+    lines.append("║  Window: upcoming fixtures                   ║")
     lines.append(f"╚{bar}╝")
     lines.append("")
     lines.append("📌 YESTERDAY")
@@ -95,7 +95,12 @@ def render_report(picks, day=None, title="Over / Under 2.5 + BTTS + Home",
                 markets.append(p["market"])
         for mkt in markets:
             icon = SECTION_ICONS.get(mkt, "⚽")
-            label = day_picks[[p["market"] for p in day_picks].index(mkt)]["label"]
+            label = {"home_dw": "Double Chance 1X (Home or Draw)",
+                     "over15":  "Over 1.5 goals",
+                     "under35": "Under 3.5 goals"}.get(
+                mkt,
+                day_picks[[p["market"] for p in day_picks].index(mkt)]["label"]
+            )
             lines.append(f"{icon} {label}")
             lines.append("")
             premiers = [p for p in day_picks if p["market"] == mkt and p["tier"].startswith("🔥")]
@@ -121,16 +126,26 @@ def render_report(picks, day=None, title="Over / Under 2.5 + BTTS + Home",
 def _pick_block(p):
     sig = p.get("statarea_signal", "NOT_FOUND")
     sig_note = {"AGREE_OVER": "✓ statarea agrees",
+                "AGREE_OVER15": "✓ statarea agrees (O15)",
+                "AGREE_HOME_DW": "✓ statarea agrees (DC 1X)",
                 "AGREE_UNDER": "✗ statarea leans UNDER",
                 "AGREE_HOME": "✓ statarea home ≥55",
                 "DIVERGE": f"~ statarea O25 {p['statarea']['over25']}% (diverges)" if p.get("statarea") else "~ diverges",
                 "NOT_FOUND": "· not on statarea card"}.get(sig, "")
-    pick_line = f"Over {p['line']} · " if p["market"] == "over" else ""
+    prefix = ""
+    if p["market"] == "over":
+        prefix = f"Over {p['line']} · "
+    elif p["market"] == "over15":
+        prefix = "Over 1.5 goals · "
+    label_for_line = {
+        "home_dw": "Double Chance 1X (Home or Draw)",
+        "over15": "Over 1.5 goals",
+    }.get(p["market"], p.get("label", p["market"]))
     b = [
         f"  {p.get('num','?')}. {p['home']} vs {p['away']}",
         f"     Date: {p['date']}",
         f"     League: {p['league']}",
-        f"     Pick: {p['label']} · {'High' if p['confidence']>=0.7 else 'Medium'} confidence ({p['confidence']*100:.1f}%)",
+        f"     Pick: {label_for_line} · {'High' if p['confidence']>=0.7 else 'Medium'} confidence ({p['confidence']*100:.1f}%)",
         "     Category:",
         f"       • Tier: {p['tier']}" + (f"   [{sig_note}]" if sig_note else ""),
         f"     Suggested stake: {p['stake_pct']}% @ {p.get('odds',2.0)}",

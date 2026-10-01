@@ -1,15 +1,17 @@
 """Rules engine.
 
 POSITIVE markets -- rule sets are coupled so that BTTS is the literal union
-of the two team-to-score markets.  Key relationships (also enforced in code
-via _EXCLUDE and the btts override block):
+of the two team-to-score markets.  Frequency thresholds come from FREQ_CFG
+(tunable per category via OU_FREQ env; defaults = scored/conceded 4+/6,
+over/blank 4+/6, win 3+/6, cs 5+/6, btts_game 3+/6, nowin 4+/6).
+Key relationships (enforced via _EXCLUDE and the btts override block):
 
-  home_sc  = home attack (H6/H7 via _freq4 4/6)
-           + AWAY defence LEAKAGE in 4/6 (A9 away-venue, A12 overall)
+  home_sc  = home attack (H6/H7, scored category)
+           + AWAY defence LEAKAGE (A9 away-venue, A12 overall, conceded cat)
            + L3 volume confirmations (H1 home GF, A11 away GA)
 
-  away_sc  = away attack (A3/A13 via _freq4 4/6)
-           + HOME defence LEAKAGE in 4/6 (H8 home-venue, H12 overall)
+  away_sc  = away attack (A3/A13, scored category)
+           + HOME defence LEAKAGE (H8 home-venue, H12 overall, conceded cat)
            + L3 volume confirmations (A1 away GF, H10 home GA)
 
   btts     = home_sc  U  away_sc   (literal set union: same checks, merged)
@@ -19,16 +21,17 @@ via _EXCLUDE and the btts override block):
              away leakage (A9/A11), away attack pairs with home leakage
              (H8/H10), plus volatile sides (HB/AB = score AND concede in
              the same games) and the proven over patterns (H2/H3/A4/A5)
-  over15   -- inherits over's set
-  home     -- home dominance (H16 wins 3+/6) + acceptable-form rule
-             (H14/H15: 4 wins in 6 OR unbeaten 5/6) + home solidity (H17)
-             + away no-win (A16) + away leaks (A9/A12)
-  home_dw  -- home's evidence but draw-friendly: winless-away (A14/A15),
-             weak away attack (A17/A18)
+  over15   -- inherits over's check set, excludes L3 volume rules (H1/A1/H10/A11)
+  home     -- home dominance (H16, win category) + acceptable-form rule
+             (H14/H15: 4 wins/6 OR unbeaten 5/6) + home solidity (H17)
+             + away no-win (A16, nowin cat) + away leaks (A9/A12)
+  home_dw  -- home's evidence but draw-friendly: winless-away (A14/A15,
+             nowin cat), weak away attack (A17/A18, blank cat)
 
 NEGATIVE markets (under, no_btts): mirrored check set; no_btts has the
-dominance rule (DOM): one side keeps clean sheets OR the other blanks 50%+.
-under35 shares under's check set but uses its own H2H predicate (total<=3).
+dominance rule (DOM): one side keeps clean sheets (cs cat) OR the other
+blanks 50%+ (blank cat). under35 shares under's check set but uses its
+own H2H predicate (total <= 3).
 
 H2H: expected result in >= half of last up-to-6 meetings; 1/1 counts;
      zero meetings is a neutral pass.
@@ -39,65 +42,92 @@ import math
 from .config import FREQ_CFG
 from .teams import normalize
 
-CHECK_NAMES = {
-    "H1": "Home goals L3 home (7+)",
-    "H2": "Home over 2.5 (4+/6 home)",
-    "H3": "Home over 2.5 (L6 overall)",
-    "H4": "Home BTTS (L6 home)",
-    "H5": "Home BTTS (L6 overall)",
-    "H6": "Home scored (4+/6 home)",
-    "H7": "Home scored (4+/6 overall)",
-    "H8": "Home conceded (4+/6 home)",
-    "H10": "Home conceded 7+ (L3 home)",
-    "H12": "Home concedes (4+/6 overall)",
-    "H14": "Home form: 4W/6 or unbeaten 5/6 home",
-    "H15": "Home form: 4W/6 or unbeaten 5/6 overall",
-    "H16": "Home win (3+/6 home)",
-    "H17": "Home conceded <=2 (L3 home)",
-    "A1": "Away goals L3 away (7+)",
-    "A3": "Away scored (4+/6 away)",
-    "A4": "Away over 2.5 (4+/6 away)",
-    "A5": "Away over 2.5 (L6 overall)",
-    "A6": "Away BTTS (L6 away)",
-    "A7": "Away BTTS (L6 overall)",
-    "A8": "Away scored (4+/6 overall)",
-    "A9": "Away conceded (4+/6 away)",
-    "A11": "Away conceded 7+ (L3 away)",
-    "A12": "Away concedes (4+/6 overall)",
-    "A13": "Away scored (4+/6 overall)",
-    "A14": "Away winless (4+/6 away)",
-    "A15": "Away winless (4+/6 overall)",
-    "A16": "Away no win (4+/6 away)",
-    "A17": "Away scored <=4 (L3 away)",
-    "A18": "Away blanked (4+/6 away)",
-    "S6": "Both teams active",
-    "H2H": "Head-to-head pattern",
-    "HB": "Home BTTS game (3+/6 home)",
-    "AB": "Away BTTS game (3+/6 away)",
-    # under 2.5 mirrors
-    "H1u": "Home scored <=4 (L3 home)",
-    "H2u": "Home under 2.5 (4+/6 home)",
-    "H3u": "Home under 2.5 (L6 overall)",
-    "H10u": "Home conceded <=2 (L3 home)",
-    "A1u": "Away scored <=4 (L3 away)",
-    "A3u": "Away blanked (4+/6 away)",
-    "A4u": "Away under 2.5 (4+/6 away)",
-    "A5u": "Away under 2.5 (L6 overall)",
-    "A11u": "Away conceded <=2 (L3 away)",
-    # no-btts mirrors
-    "H4n": "Home BTTS <=2 of L6 home",
-    "H5n": "Home BTTS <=2 of L6 overall",
-    "H6n": "Home blanked (4+/6 home)",
-    "H8n": "Home clean sheet (5+/6 home)",
-    "H9n": "Home clean sheet (5+/6 overall)",
-    "A3n": "Away blanked (4+/6 away)",
-    "A6n": "Away BTTS <=2 of L6 away",
-    "A7n": "Away BTTS <=2 of L6 overall",
-    "A8n": "Away blanked (4+/6 overall)",
-    "A9n": "Away clean sheet (5+/6 away)",
-    "A10n": "Away clean sheet (5+/6 overall)",
-    "DOM": "One side dominant (CS or blank 50%+)",
-}
+
+def _build_check_names(freq):
+    """Build the check-name lookup table DYNAMICALLY from FREQ_CFG.
+
+    This ensures the 'Missed' list in every pick block shows the REAL
+    thresholds (4+/6, 5+/6, or 6+/6) that the rule engine actually used,
+    not a hardcoded '4+/6'.  Freq categories map as follows:
+
+      scored   -> H6, H7, A3, A8, A13
+      conceded -> H8, H12, A9, A12
+      over     -> H2, A4, H2u, A4u       (same category; 'under' is the flip)
+      blank    -> A18, H6n, A3n, A8n, A3u
+      win      -> H16
+      cs       -> H8n, H9n, A9n, A10n
+      btts_game -> HB, AB
+      nowin    -> A14, A15, A16
+    """
+    s = freq["scored"]["full"]
+    c = freq["conceded"]["full"]
+    o = freq["over"]["full"]
+    b = freq["blank"]["full"]
+    w = freq["win"]["full"]
+    x = freq["cs"]["full"]
+    t = freq["btts_game"]["full"]
+    n = freq["nowin"]["full"]
+
+    return {
+        "H1": "Home goals L3 home (7+)",
+        "H2": f"Home over 2.5 ({o}+/6 home)",
+        "H3": "Home over 2.5 (L6 overall, >=50%)",
+        "H4": "Home BTTS (L6 home, >=50%)",
+        "H5": "Home BTTS (L6 overall, >=50%)",
+        "H6": f"Home scored ({s}+/6 home)",
+        "H7": f"Home scored ({s}+/6 overall)",
+        "H8": f"Home conceded ({c}+/6 home)",
+        "H10": "Home conceded 7+ (L3 home)",
+        "H12": f"Home concedes ({c}+/6 overall)",
+        "H14": "Home form: 4W/6 or unbeaten 5/6 home",
+        "H15": "Home form: 4W/6 or unbeaten 5/6 overall",
+        "H16": f"Home win ({w}+/6 home)",
+        "H17": "Home conceded <=2 (L3 home)",
+        "A1": "Away goals L3 away (7+)",
+        "A3": f"Away scored ({s}+/6 away)",
+        "A4": f"Away over 2.5 ({o}+/6 away)",
+        "A5": "Away over 2.5 (L6 overall, >=50%)",
+        "A6": "Away BTTS (L6 away, >=50%)",
+        "A7": "Away BTTS (L6 overall, >=50%)",
+        "A8": f"Away scored ({s}+/6 overall)",
+        "A9": f"Away conceded ({c}+/6 away)",
+        "A11": "Away conceded 7+ (L3 away)",
+        "A12": f"Away concedes ({c}+/6 overall)",
+        "A13": f"Away scored ({s}+/6 overall)",
+        "A14": f"Away winless ({n}+/6 away)",
+        "A15": f"Away winless ({n}+/6 overall)",
+        "A16": f"Away no win ({n}+/6 away)",
+        "A17": "Away scored <=4 (L3 away)",
+        "A18": f"Away blanked ({b}+/6 away)",
+        "S6": "Both teams active",
+        "H2H": "Head-to-head pattern",
+        "HB": f"Home BTTS game ({t}+/6 home)",
+        "AB": f"Away BTTS game ({t}+/6 away)",
+        "H1u": "Home scored <=4 (L3 home)",
+        "H2u": f"Home under 2.5 ({o}+/6 home)",
+        "H3u": "Home under 2.5 (L6 overall, >=50%)",
+        "H10u": "Home conceded <=2 (L3 home)",
+        "A1u": "Away scored <=4 (L3 away)",
+        "A3u": f"Away blanked ({b}+/6 away)",
+        "A4u": f"Away under 2.5 ({o}+/6 away)",
+        "A5u": "Away under 2.5 (L6 overall, >=50%)",
+        "A11u": "Away conceded <=2 (L3 away)",
+        "H4n": "Home BTTS <=2 of L6 home",
+        "H5n": "Home BTTS <=2 of L6 overall",
+        "H6n": f"Home blanked ({b}+/6 home)",
+        "H8n": f"Home clean sheet ({x}+/6 home)",
+        "H9n": f"Home clean sheet ({x}+/6 overall)",
+        "A3n": f"Away blanked ({b}+/6 away)",
+        "A6n": "Away BTTS <=2 of L6 away",
+        "A7n": "Away BTTS <=2 of L6 overall",
+        "A8n": f"Away blanked ({b}+/6 overall)",
+        "A9n": f"Away clean sheet ({x}+/6 away)",
+        "A10n": f"Away clean sheet ({x}+/6 overall)",
+        "DOM": "One side dominant (CS or blank 50%+)",
+    }
+
+
+CHECK_NAMES = _build_check_names(FREQ_CFG)
 
 H2H_PRED = {
     "over":    lambda m: m["gf"] + m["ga"] > 2.5,
@@ -223,7 +253,7 @@ def _strong_unbeaten(ms):
 #     already captured implicitly by requiring both halves to fire.
 _EXCLUDE = {
     "over":    {"H4", "H7", "A6"},
-    "over15":  {"H4", "H7", "A6"},
+    "over15":  {"H4", "H7", "A6", "H1", "A1", "A11", "H10"},
     "btts":    {"H2", "H3", "H4", "H5", "A4", "A5", "A6", "A7",
                 "H1", "A11", "A1", "H10"},
     "home":    {"H2", "H3", "H4", "H5", "H8", "H10", "A1", "A3",
@@ -233,7 +263,7 @@ _EXCLUDE = {
     "away_sc": {"H1", "H2", "H3", "H4", "H5", "H6", "H7",
                 "A4", "A5", "A6", "A7", "A9", "A11", "A1", "H10"},
     "home_dw": {"H2", "H3", "H4", "H5", "H8", "H10", "A1", "A3",
-                "A4", "A5", "A6", "A7"},
+                "A4", "A5", "A6", "A7", "A11", "H17"},
 }
 
 
