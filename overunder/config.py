@@ -74,20 +74,63 @@ def _parse_freq_thresholds():
          full   = numerator out of the last 6 matches (default window)
          short  = numerator out of the last 3 matches (fallback when <6 exist)
 
-       Categories (used to tune each class of evidence independently):
-         scored   -- team actually scored a goal (attack evidence)
-         conceded -- team conceded a goal (defence-leakage evidence)
-         over     -- over-X-line pattern (e.g. over 2.5, under 2.5)
-         blank    -- team blanked / failed to score (no_btts, under)
-         win      -- outright wins (home dominance)
-         cs       -- clean sheet / conceded zero (no_btts defence)
-         btts_game -- both teams scored in the same game (volatile sides)
-         nowin    -- team failed to win (drew or lost; away form)
+    CATEGORY DEFINITION TABLE (OU_FREQ = 8 categories × what they gate)
+    ------------------------------------------------------------------
+    Each token cat:N:M means "cat happened in N+/6 matches (or M+/3 fallback)".
+    Predicate used inside _freq_cat() is always the same per category.
+
+    Category    | _freq_cat predicate   | Check-IDs powered by this category
+    ------------|-----------------------|---------------------------------------------
+    scored      | team scored ≥1 goal   | Home attack : H6 (home venue), H7 (overall)
+                |   (gf > 0)            | Away attack : A3 (away venue),
+                |                       |               A8 (overall -- over/over15 only),
+                |                       |               A13 (overall -- btts/away_sc only)
+                |   NOTE home attack has 2 BASE checks (H6+H7), away attack has
+                |        only 1 BASE check (A3). A8/A13 are AWAY-OVERALL scored,
+                |        injected CONDITIONALLY per market by run_checks to
+                |        complete the "both attacks fire" profile only for
+                |        markets that need it. See asymmetry doc in run_checks.
+    ------------|-----------------------|---------------------------------------------
+    conceded    | team conceded ≥1 goal | Home defence leaks: H8 (home venue),
+                |   (ga > 0)            |                   H12 (overall, btts/home_sc/home/home_dw)
+                |                       | Away defence leaks: A9 (away venue),
+                |                       |                   A12 (overall, btts/home/home_sc/home_dw)
+    ------------|-----------------------|---------------------------------------------
+    over        | match total goals > X | H2 (home venue over 2.5 freq),
+                |   (lambda is per      | A4 (away venue over 2.5 freq),
+                |    market: over/under)| H2u (home venue under 2.5 freq, under-set),
+                |                       | A4u (away venue under 2.5 freq, under-set)
+    ------------|-----------------------|---------------------------------------------
+    blank       | team scored 0 goals   | Away attack absent : A3u (away venue, under-set),
+                |   (gf == 0)           |                      A18 (away venue, home_dw)
+                |                       | No-btts defence   : H6n (home venue blanked rate),
+                |                       |                      A3n (away venue blanked rate),
+                |                       |                      A8n (away overall blanked rate)
+    ------------|-----------------------|---------------------------------------------
+    win         | team won outright     | H16 (home venue outright wins, home market)
+                |   (gf > ga)           |
+    ------------|-----------------------|---------------------------------------------
+    cs          | team kept clean sheet | No-btts defence : H8n (home venue CS rate),
+                |   (ga == 0)           |                  H9n (home overall CS rate),
+                |                       |                  A9n (away venue CS rate),
+                |                       |                  A10n (away overall CS rate)
+    ------------|-----------------------|---------------------------------------------
+    btts_game   | both teams scored in  | HB (home venue BTTS-rate, over/over15 only),
+                | the same game         | AB (away venue BTTS-rate, over/over15 only)
+                |   (gf > 0 AND ga > 0) |
+    ------------|-----------------------|---------------------------------------------
+    nowin       | team failed to win    | A14 (away venue nowin rate, home_dw),
+                | (drew or lost:        | A15 (away overall nowin rate, home_dw),
+                |    gf <= ga)          | A16 (away venue nowin rate, home market)
+    ---------------------------------------------------------------------------
 
        Override with env, e.g. (4/6 relaxed, 5/6 medium, 6/6 strict):
-         OU_FREQ="scored:4:2,conceded:4:2,over:4:2,blank:4:2,win:3:2,cs:5:3"   -- relaxed (default)
-         OU_FREQ="scored:5:3,conceded:5:3,over:4:2,blank:4:2,win:3:2,cs:5:3"   -- medium
-         OU_FREQ="scored:6:3,conceded:6:3,over:4:2,blank:4:2,win:3:2,cs:5:3"   -- strict (cleanest, fewest picks)
+         OU_FREQ="scored:4:2,conceded:4:2,over:4:2,blank:4:2,win:3:2,cs:5:3,
+                   btts_game:3:2,nowin:4:2"                                 -- relaxed (default)
+         OU_FREQ="scored:5:3,conceded:5:3,over:4:2,blank:4:2,win:3:2,cs:5:3,
+                   btts_game:3:2,nowin:4:2"                                 -- medium
+         OU_FREQ="scored:6:3,conceded:6:3,over:4:2,blank:4:2,win:3:2,cs:5:3,
+                   btts_game:3:2,nowin:4:2"                                 -- strict (fewest picks)
        scored:4:2 means "scored in 4+/6 matches, fallback 2+/3 when <6 exist".
     """
     defaults = {

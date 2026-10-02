@@ -257,7 +257,13 @@ _EXCLUDE = {
     "btts":    {"H2", "H3", "H4", "H5", "A4", "A5", "A6", "A7",
                 "H1", "A11", "A1", "H10"},
     "home":    {"H2", "H3", "H4", "H5", "H8", "H10", "A1", "A3",
-                "A4", "A5", "A6", "A7", "A11", "H17"},
+                "A4", "A5", "A6", "A7", "A11", "H17",
+                # -- user request 2026-10-03: remove conceded-category
+                # (5/6 medium bar) "clean-sheet inverse" from home market.
+                # A9 = away-venue conceded freq, A12 = away-overall
+                # conceded freq; Home win should fire on home form + away
+                # nowin + outright wins only, NOT demand away-team leaks.
+                "A9", "A12"},
     "home_sc": {"H2", "H3", "H4", "H5", "H8", "H10", "A1", "A3",
                 "A4", "A5", "A6", "A7", "H1", "A11"},
     "away_sc": {"H1", "H2", "H3", "H4", "H5", "H6", "H7",
@@ -310,6 +316,25 @@ def _negative_checks(home_ms, away_ms, check_set, away_name, h2h_market):
 
 
 def run_checks(home_ms, away_ms, market=None, home_name="", away_name=""):
+    # CHECK-ID ASYMMETRY DOC -- scored-category base count (why home=2, away=1, away=3):
+    #   Home attack (scored): H6 venue + H7 overall  = 2 checks IN BASE DICT.
+    #     Home venue = fixture host; home attack form ALWAYS relevant regardless of
+    #     market, so base H6+H7 are included unconditionally for all markets.
+    #   Away attack (scored): A3 venue             = 1 check IN BASE DICT.
+    #     A8  overall -- injected for over/over15 branches only (below).
+    #     A13 overall -- injected for btts/away_sc branches only (below).
+    #   Net:
+    #     + home_sc (home to score):    uses H6+H7 (both base).  2 checks.
+    #     + away_sc (away to score):   uses A3 (base) + A13 (below).  2 checks.
+    #     + over/over15:                uses H6+H7+A3 (base) + A8 (below).  4 checks.
+    #     + btts (= home_sc U away_sc): uses H6+H7+A3 (base) + A13 (below). 4 checks.
+    #   Rationale: away attack overall form (A8/A13) is expensive evidence for
+    #   markets that don't require "both sides fire" (e.g. home only cares
+    #   about home dominance, not if away scored well elsewhere); injecting it
+    #   per-market lets each check_ratio reflect only the evidence relevant to that
+    #   market.  Home attack overall is universally relevant because home is
+    #   always the fixture host at their own stadium.
+    #
     # under35 shares under's mirrored check set but keeps its own H2H predicate
     if market in ("under", "no_btts", "under35"):
         check_set = "under" if market == "under35" else market
@@ -374,9 +399,13 @@ def run_checks(home_ms, away_ms, market=None, home_name="", away_name=""):
             "H12": _freq_cat("conceded", h6, lambda m: m["ga"] > 0),
         })
     elif market == "home":
-        # dominance + acceptable form + away no-win + leaks
+        # dominance + acceptable form + away no-win.
+        # A9 (away-venue conceded) and A12 (away-overall conceded) are
+        # EXCLUDED from home per user 2026-10-03 -- the 5/6 "clean-sheet
+        # inverse" bar demands away leak 5+/6, which makes home market
+        # unreachable for teams that play decent away defences. Home-win
+        # now fires on home form + away road-futility only.
         checks.update({
-            "A12": _freq_cat("conceded", a6, lambda m: m["ga"] > 0),
             "H14": _strong_unbeaten(h6H),
             "H15": _strong_unbeaten(h6),
             "H16": _freq_cat("win", h6H, lambda m: m["gf"] > m["ga"]),
