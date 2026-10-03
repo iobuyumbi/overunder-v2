@@ -43,19 +43,18 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  # --------- Non-secret tunables (edit to taste; match values in .env locally) ---------
-  OU_RULES_VERSION:       "2026-10-03.4-full10-markets-strict-6of6"
-  OU_FREQ:                "scored:6:3,conceded:6:3,over:4:2,blank:4:2,win:3:2,cs:5:3,btts_game:3:2,nowin:4:2"
+  # --------- Non-secret tunables (edit to taste; MUST mirror values in local .env) ---------
+  # DEFAULT / RELAXED 4/6 preset (factory default: balanced signal, generous fallback 2+/3)
+  OU_RULES_VERSION:       "2026-10-03.3-full10-markets-relaxed-4of6"
+  OU_FREQ:                "scored:4:2,conceded:4:2,over:4:2,blank:4:2,win:3:2,cs:5:3,btts_game:3:2,nowin:4:2"
   OU_DEFAULT_ODDS:        "1.90"
   OU_DEFAULT_STAKE_PCT:   "3"
-  OU_O25_MIN_CONF:        "0.85"
-  OU_U35_MIN_CONF:        "0.90"
-  OU_BTTS_MIN_CONF:       "0.75"
-  OU_OVER15_MIN_CONF:     "0.92"
-  OU_HOME_MIN_CONF:       "0.85"
-  OU_HOMEDW_MIN_CONF:     "0.88"
-  OU_HOMESC_MIN_CONF:     "0.85"
-  OU_AWAYSC_MIN_CONF:     "0.80"
+  # Relaxed-4/6 tuned gates (Over Poisson p caps at ~0.74 so gate cannot exceed ~0.78
+  # for check_ratio ≤ 0.90; convention: PREMIUM=GATE+0.03, SOLID=PREMIUM-0.02.
+  # (Valid for BOTH relaxed-4/6 AND medium-5/6; tighter freq just moves fewer picks into tier.)
+  OU_MARKET_MIN_CONF:     "over:0.79,home:0.79,home_sc:0.80,away_sc:0.75,home_dw:0.82,over15:0.87,under35:0.85,btts:0.71"
+  OU_MARKET_PREMIUM:      "over:0.82,home:0.82,home_sc:0.83,away_sc:0.78,home_dw:0.85,over15:0.90,under35:0.88,btts:0.74"
+  OU_MARKET_SOLID:        "over:0.80,home:0.80,home_sc:0.81,away_sc:0.76,home_dw:0.83,over15:0.88,under35:0.86,btts:0.72"
   OU_PREMIUM_MULTIPLIER:  "1.10"
   OU_TIER_GATE:           "0.85"
   OU_PREMIUM_GATE:        "0.92"
@@ -64,6 +63,16 @@ env:
   OU_LEAGUE_WINDOW_DAYS:  "30"
   OU_LEAGUE_MIN_PICKS:    "6"
   OU_LEAGUE_CAUTION_GATE: "0.30"
+  # Legacy per-market env vars (kept for backcompat if any code still reads them;
+  # superseded by OU_MARKET_{MIN_CONF,PREMIUM,SOLID} above)
+  OU_O25_MIN_CONF:        "0.79"
+  OU_U35_MIN_CONF:        "0.85"
+  OU_BTTS_MIN_CONF:       "0.71"
+  OU_OVER15_MIN_CONF:     "0.87"
+  OU_HOME_MIN_CONF:       "0.79"
+  OU_HOMEDW_MIN_CONF:     "0.82"
+  OU_HOMESC_MIN_CONF:     "0.80"
+  OU_AWAYSC_MIN_CONF:     "0.75"
   # --------- Secrets (set in repo Settings -> Secrets and variables -> Actions) ---------
   TELEGRAM_TOKEN:     ${{ secrets.TELEGRAM_TOKEN }}
   TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
