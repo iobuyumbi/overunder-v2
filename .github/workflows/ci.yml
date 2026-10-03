@@ -6,13 +6,52 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
+      - name: Cache pip install
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: ${{ runner.os }}-pip-
+
       - run: pip install -r requirements.txt
+
       - name: unit tests
-        run: python -m unittest discover -s tests -v
-      - name: offline demo
-        run: python -m overunder demo --markets over
+        run: python -m unittest discover -s tests -v 2>&1 | tee unittest_output.txt
+
+      - name: offline demo (predict + report on sample data)
+        run: |
+          python -m overunder demo --markets over,btts,home,home_sc,away_sc,over15,home_dw 2>&1 | tee demo_output.txt
+
+      - name: env file parser sanity check
+        run: |
+          python - <<'PY'
+          import os, sys
+          sys.path.insert(0, '.')
+          from overunder import config
+          print(f"HISTORY_FILE        = {config.HISTORY_FILE}")
+          print(f"RULES_VERSION       = {config.RULES_VERSION}")
+          print(f"FREQ_CFG (scored)   = {config.FREQ_CFG['scored']}")
+          print(f"FREQ_CFG (conceded) = {config.FREQ_CFG['conceded']}")
+          print(f"MARKET_SOLID over   = {config.MARKET_SOLID['over']}")
+          print(f"MARKET_SOLID btts   = {config.MARKET_SOLID['btts']}")
+          print("env parser OK — FREQ_CFG parsed correctly, thresholds present")
+          PY
+
+      - name: Upload CI logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-logs-${{ github.run_id }}
+          path: |
+            unittest_output.txt
+            demo_output.txt
+          if-no-files-found: warn

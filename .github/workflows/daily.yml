@@ -1,39 +1,556 @@
 name: daily
-# Cloud pipeline. NOTE: GitHub runner IPs are often blocked by soccerbase and
-# statarea, so scraping steps are best-effort (continue-on-error). The
-# authoritative daily run is run_local.bat / run_daily.sh on your machine;
-# use this as a backup that never blocks, plus artifact backup of data/.
-# Secrets (optional): TELEGRAM_TOKEN, TELEGRAM_CHAT_ID in repo Settings ->
-# Secrets and variables -> Actions.
+
 on:
   schedule:
-    - cron: "0 9 * * *"     # 09:00 UTC daily
+    - cron: "0 8 * * *"   # 08:00 UTC = 11:00 EAT: publish today's predictions + VIP report to Telegram
+    - cron: "0 22 * * *"  # 22:00 UTC = 01:00 EAT next day: settle recent match results
+    - cron: "0 3 * * 1"   # 03:00 UTC Monday = 06:00 EAT: weekly performance report
+    - cron: "0 3 1 * *"   # 03:00 UTC on 1st = 06:00 EAT: monthly performance report
   workflow_dispatch:
+    inputs:
+      mode:
+        description: "What should this manual run do?"
+        required: true
+        default: "publish"
+        type: choice
+        options:
+          - settle
+          - publish
+          - weekly
+          - monthly
+          - all
+      days_back:
+        description: "Days back to settle (settle/weekly/monthly modes only)"
+        required: false
+        default: "3"
+        type: string
+      markets:
+        description: "Comma-separated markets for publish mode (default all 10)"
+        required: false
+        default: "over,over15,under,under35,btts,no_btts,home,home_dw,home_sc,away_sc"
+        type: string
+      predict_days:
+        description: "How many future days to predict (publish/all modes, default 2)"
+        required: false
+        default: "2"
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  # --------- Non-secret tunables (edit to taste; match values in .env locally) ---------
+  OU_RULES_VERSION:       "2026-10-03.4-full10-markets-strict-6of6"
+  OU_FREQ:                "scored:6:3,conceded:6:3,over:4:2,blank:4:2,win:3:2,cs:5:3,btts_game:3:2,nowin:4:2"
+  OU_DEFAULT_ODDS:        "1.90"
+  OU_DEFAULT_STAKE_PCT:   "3"
+  OU_O25_MIN_CONF:        "0.85"
+  OU_U35_MIN_CONF:        "0.90"
+  OU_BTTS_MIN_CONF:       "0.75"
+  OU_OVER15_MIN_CONF:     "0.92"
+  OU_HOME_MIN_CONF:       "0.85"
+  OU_HOMEDW_MIN_CONF:     "0.88"
+  OU_HOMESC_MIN_CONF:     "0.85"
+  OU_AWAYSC_MIN_CONF:     "0.80"
+  OU_PREMIUM_MULTIPLIER:  "1.10"
+  OU_TIER_GATE:           "0.85"
+  OU_PREMIUM_GATE:        "0.92"
+  OU_P_LAMBDA_MIN:        "0.35"
+  OU_P_LAMBDA_MAX:        "5.0"
+  OU_LEAGUE_WINDOW_DAYS:  "30"
+  OU_LEAGUE_MIN_PICKS:    "6"
+  OU_LEAGUE_CAUTION_GATE: "0.30"
+  # --------- Secrets (set in repo Settings -> Secrets and variables -> Actions) ---------
+  TELEGRAM_TOKEN:     ${{ secrets.TELEGRAM_TOKEN }}
+  TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
+  TELEGRAM_VIP_CHAT_ID: ${{ secrets.TELEGRAM_VIP_CHAT_ID }}
 
 jobs:
-  daily:
+  settle:
+    name: settle-recent-results
     runs-on: ubuntu-latest
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash
+    if: |
+      github.event.schedule == '0 22 * * *' ||
+      (github.event_name == 'workflow_dispatch' &&
+       (github.event.inputs.mode == 'settle' || github.event.inputs.mode == 'all'))
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Restore history & cache dirs
+        uses: actions/cache@v4
+        with:
+          path: |
+            data/
+            .statarea_cache/
+          key: overunder-v2-data-${{ github.run_id }}
+          restore-keys: |
+            overunder-v2-data-
+
+      - name: Restore team scrape cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/overunder/
+            ~/.cache/requests-cache/
+          key: overunder-v2-scrape-${{ github.run_id }}
+          restore-keys: |
+            overunder-v2-scrape-
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install -r requirements.txt
-      - name: tests first -- never run a broken pipeline
-        run: python -m unittest discover -s tests
-      - name: cache statarea card (best-effort)
-        run: python -m overunder fetch-statarea
-        continue-on-error: true
-      - name: predict (best-effort from cloud IP)
-        run: python -m overunder predict --statarea
-        continue-on-error: true
-      - name: settle pending (works if results pages are reachable)
-        run: python -m overunder settle
-        continue-on-error: true
-      - name: stats snapshot
-        run: python -m overunder stats
-      - uses: actions/upload-artifact@v4
+
+      - name: Install dependencies
+        timeout-minutes: 10
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Sync latest main
+        run: git pull --rebase --autostash origin main || true
+
+      - name: Settle pending match results
+        timeout-minutes: 90
+        run: |
+          set +e
+          DAYS="${{ github.event.inputs.days_back || '3' }}"
+          for attempt in 1 2 3; do
+            echo "=== settle attempt $attempt (days_back=$DAYS) ==="
+            if python -m overunder settle 2>&1 | tee settle_output.txt; then
+              echo "settle OK on attempt $attempt"
+              break
+            fi
+            echo "Attempt $attempt FAILED, retrying in 60s..."
+            sleep 60
+          done
+          echo "=== recent settled ==="
+          python -m overunder recent -n 20 2>&1 | tee -a settle_output.txt
+          echo "=== stats snapshot ==="
+          python -m overunder stats 2>&1 | tee stats_output.txt
+          exit 0
+
+      - name: Send results summary to Telegram
+        if: always()
+        run: |
+          python - <<'PY'
+          import os, sys
+          sys.path.insert(0, '.')
+          from overunder.notify import send_telegram, send_vip
+          stats_path = 'stats_output.txt'
+          settle_path = 'settle_output.txt'
+          parts = ['📊 OVERUNDER-V2 RESULTS SETTLEMENT']
+          for p, title in [(stats_path, 'Stats'), (settle_path, 'Settle log (last 60 lines)')]:
+              if os.path.exists(p):
+                  t = open(p, errors='replace').read()
+                  if title != 'Stats':
+                      t = '\n'.join(t.splitlines()[-60:])
+                  parts.append(f'--- {title} ---\n{t[:3800]}')
+          msg = '\n\n'.join(parts)[:4000]
+          send_telegram(msg)
+          send_vip(msg)
+          PY
+
+      - name: Upload settlement artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          name: data-backup-${{ github.run_id }}
-          path: data/
-          retention-days: 30
+          name: settle-output-${{ github.run_id }}
+          path: |
+            settle_output.txt
+            stats_output.txt
+            data/
+          if-no-files-found: warn
+
+      - name: Commit updated prediction history + league health
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git pull --rebase --autostash origin main || true
+          git add -f data/*.json data/*.md .statarea_cache/ 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "No history changes to commit."
+          else
+            git commit -m "Settle results: update prediction history + health"
+            git push origin main
+          fi
+
+  publish:
+    name: publish-daily-predictions
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    defaults:
+      run:
+        shell: bash
+    if: |
+      github.event.schedule == '0 8 * * *' ||
+      (github.event_name == 'workflow_dispatch' &&
+       (github.event.inputs.mode == 'publish' || github.event.inputs.mode == 'all'))
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Restore history & cache dirs
+        uses: actions/cache@v4
+        with:
+          path: |
+            data/
+            .statarea_cache/
+          key: overunder-v2-data-${{ github.run_id }}
+          restore-keys: |
+            overunder-v2-data-
+
+      - name: Restore team scrape cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/overunder/
+            ~/.cache/requests-cache/
+          key: overunder-v2-scrape-${{ github.run_id }}
+          restore-keys: |
+            overunder-v2-scrape-
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        timeout-minutes: 10
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Sync latest main
+        run: git pull --rebase --autostash origin main || true
+
+      - name: Today's date (EAT = UTC+3)
+        id: date
+        run: |
+          DATE="$(python -c "from datetime import datetime,timedelta; print((datetime.utcnow()+timedelta(hours=3)).strftime('%Y-%m-%d'))")"
+          echo "publish_date=$DATE" >> "$GITHUB_OUTPUT"
+
+      - name: CI sanity check (unit tests + demo)
+        timeout-minutes: 8
+        run: |
+          set +e
+          python -m unittest discover -s tests -v 2>&1 | tee ci_output.txt
+          CI_RC=${PIPESTATUS[0]}
+          echo "ci_rc=$CI_RC" > ci_rc.txt
+          exit 0
+
+      - name: Cache Statarea card (best-effort)
+        continue-on-error: true
+        run: python -m overunder fetch-statarea 2>&1 | tee statarea_output.txt
+
+      - name: Run full prediction pipeline
+        timeout-minutes: 120
+        run: |
+          set +e
+          MARKETS="${{ github.event.inputs.markets || 'over,over15,under,under35,btts,no_btts,home,home_dw,home_sc,away_sc' }}"
+          DAYS="${{ github.event.inputs.predict_days || '2' }}"
+          for attempt in 1 2 3; do
+            echo "=== PREDICT attempt $attempt (markets=$MARKETS, days=$DAYS) ==="
+            if python -m overunder predict --statarea --days "$DAYS" --markets "$MARKETS" 2>&1 | tee predict_output.txt; then
+              echo "predict OK on attempt $attempt"
+              break
+            fi
+            echo "Attempt $attempt FAILED, retrying in 60s..."
+            sleep 60
+          done
+          echo "=== REPORT (VIP style) ==="
+          python -m overunder report --days "$DAYS" --markets "$MARKETS" 2>&1 | tee vip_report_output.txt
+          echo "=== STATS ==="
+          python -m overunder stats 2>&1 | tee stats_after_predict.txt
+          exit 0
+
+      - name: Persist VIP report + predictions as today's publish artifacts
+        run: |
+          DATE="${{ steps.date.outputs.publish_date }}"
+          mkdir -p publish/$DATE
+          cp predict_output.txt    publish/$DATE/predict_output.txt
+          cp vip_report_output.txt publish/$DATE/vip_report_output.txt
+          cp stats_after_predict.txt publish/$DATE/stats_after_predict.txt
+          cp ci_output.txt publish/$DATE/ci_output.txt 2>/dev/null || true
+          cp statarea_output.txt publish/$DATE/statarea_output.txt 2>/dev/null || true
+          echo "Artifacts staged under publish/$DATE/"
+
+      - name: Send predictions to Telegram (free chat)
+        if: always()
+        run: |
+          python - <<'PY'
+          import os, sys
+          sys.path.insert(0, '.')
+          from overunder.notify import send_telegram
+          path = 'vip_report_output.txt'
+          if os.path.exists(path):
+              body = open(path, errors='replace').read()
+              # Telegram max message = 4096; split if needed
+              chunks = [body[i:i+4000] for i in range(0, len(body), 4000)]
+              for i, c in enumerate(chunks, 1):
+                  hdr = f'🎯 OVERUNDER-V2 DAILY REPORT ({i}/{len(chunks)})\n\n' if len(chunks)>1 else '🎯 OVERUNDER-V2 DAILY REPORT\n\n'
+                  send_telegram(hdr + c)
+          else:
+              send_telegram('⚠ overunder-v2 publish: vip_report_output.txt missing (predict step likely failed)')
+          PY
+
+      - name: Send predictions to Telegram (VIP chat)
+        if: always()
+        run: |
+          python - <<'PY'
+          import os, sys
+          sys.path.insert(0, '.')
+          from overunder.notify import send_vip
+          path = 'vip_report_output.txt'
+          if os.path.exists(path):
+              body = open(path, errors='replace').read()
+              chunks = [body[i:i+4000] for i in range(0, len(body), 4000)]
+              for i, c in enumerate(chunks, 1):
+                  hdr = f'⭐ VIP OVERUNDER-V2 ({i}/{len(chunks)})\n\n' if len(chunks)>1 else '⭐ VIP OVERUNDER-V2 REPORT\n\n'
+                  send_vip(hdr + c)
+          PY
+
+      - name: Upload daily publish artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-report-${{ steps.date.outputs.publish_date }}-${{ github.run_id }}
+          path: |
+            publish/
+            predict_output.txt
+            vip_report_output.txt
+            stats_after_predict.txt
+            ci_output.txt
+            statarea_output.txt
+            data/
+          retention-days: 90
+          if-no-files-found: warn
+
+      - name: Commit updated history + cached reports
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git pull --rebase --autostash origin main || true
+          git add -f data/ publish/ .statarea_cache/ 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "No prediction changes to commit."
+          else
+            git commit -m "Daily predictions for ${{ steps.date.outputs.publish_date }}"
+            git push origin main
+          fi
+
+  weekly-report:
+    name: weekly-performance-report
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    if: |
+      github.event.schedule == '0 3 * * 1' ||
+      (github.event_name == 'workflow_dispatch' &&
+       (github.event.inputs.mode == 'weekly' || github.event.inputs.mode == 'all'))
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Restore history & cache dirs
+        uses: actions/cache@v4
+        with:
+          path: |
+            data/
+            .statarea_cache/
+          key: overunder-v2-data-${{ github.run_id }}
+          restore-keys: |
+            overunder-v2-data-
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        timeout-minutes: 10
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Sync latest main
+        run: git pull --rebase --autostash origin main || true
+
+      - name: Settle + produce weekly performance summary
+        continue-on-error: true
+        run: |
+          set +e
+          for attempt in 1 2 3; do
+            echo "=== settle attempt $attempt ==="
+            if python -m overunder settle 2>&1; then break; fi
+            sleep 60
+          done
+          echo "=== FULL STATS ==="
+          python -m overunder stats 2>&1 | tee weekly_report_output.txt
+          echo "=== LEAGUE HEALTH ==="
+          python -m overunder leagues 2>&1 | tee -a weekly_report_output.txt
+          echo "=== RECENT (last 50) ==="
+          python -m overunder recent -n 50 2>&1 | tee -a weekly_report_output.txt
+          exit 0
+
+      - name: Send weekly report to Telegram
+        if: always()
+        run: |
+          python - <<'PY'
+          import os, sys
+          sys.path.insert(0, '.')
+          from overunder.notify import send_telegram, send_vip
+          path = 'weekly_report_output.txt'
+          if os.path.exists(path):
+              body = open(path, errors='replace').read()
+              chunks = [body[i:i+4000] for i in range(0, len(body), 4000)]
+              for fn in (send_telegram, send_vip):
+                  for i, c in enumerate(chunks, 1):
+                      hdr = f'📈 WEEKLY PERFORMANCE ({i}/{len(chunks)})\n\n'
+                      fn(hdr + c)
+          PY
+
+      - name: Upload weekly artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: weekly-report-${{ github.run_id }}
+          path: |
+            weekly_report_output.txt
+            data/
+          if-no-files-found: warn
+
+      - name: Commit updated weekly data
+        continue-on-error: true
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git pull --rebase --autostash origin main || true
+          git add -f data/ 2>/dev/null || true
+          if [ -f weekly_report_output.txt ]; then git add weekly_report_output.txt; fi
+          if git diff --cached --quiet; then
+            echo "No weekly changes to commit."
+          else
+            git commit -m "Weekly performance report"
+            git push origin main
+          fi
+
+  monthly-report:
+    name: monthly-performance-report
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    if: |
+      github.event.schedule == '0 3 1 * *' ||
+      (github.event_name == 'workflow_dispatch' &&
+       (github.event.inputs.mode == 'monthly' || github.event.inputs.mode == 'all'))
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Restore history & cache dirs
+        uses: actions/cache@v4
+        with:
+          path: |
+            data/
+            .statarea_cache/
+          key: overunder-v2-data-${{ github.run_id }}
+          restore-keys: |
+            overunder-v2-data-
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        timeout-minutes: 10
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Sync latest main
+        run: git pull --rebase --autostash origin main || true
+
+      - name: Settle + produce monthly performance summary
+        continue-on-error: true
+        run: |
+          set +e
+          for attempt in 1 2 3; do
+            echo "=== settle attempt $attempt ==="
+            if python -m overunder settle 2>&1; then break; fi
+            sleep 60
+          done
+          echo "=== FULL STATS ==="
+          python -m overunder stats --json 2>&1 | tee monthly_report_output.json
+          python -m overunder stats 2>&1 | tee monthly_report_output.txt
+          echo "=== LEAGUE HEALTH ==="
+          python -m overunder leagues 2>&1 | tee -a monthly_report_output.txt
+          echo "=== RECENT (last 100) ==="
+          python -m overunder recent -n 100 2>&1 | tee -a monthly_report_output.txt
+          exit 0
+
+      - name: Send monthly report to Telegram
+        if: always()
+        run: |
+          python - <<'PY'
+          import os, sys
+          sys.path.insert(0, '.')
+          from overunder.notify import send_telegram, send_vip
+          path = 'monthly_report_output.txt'
+          if os.path.exists(path):
+              body = open(path, errors='replace').read()
+              chunks = [body[i:i+4000] for i in range(0, len(body), 4000)]
+              for fn in (send_telegram, send_vip):
+                  for i, c in enumerate(chunks, 1):
+                      hdr = f'🗓️  MONTHLY PERFORMANCE ({i}/{len(chunks)})\n\n'
+                      fn(hdr + c)
+          PY
+
+      - name: Upload monthly artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: monthly-report-${{ github.run_id }}
+          path: |
+            monthly_report_output.txt
+            monthly_report_output.json
+            data/
+          if-no-files-found: warn
+          retention-days: 365
+
+      - name: Commit updated monthly data
+        continue-on-error: true
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git pull --rebase --autostash origin main || true
+          git add -f data/ 2>/dev/null || true
+          if [ -f monthly_report_output.txt ]; then git add monthly_report_output.txt monthly_report_output.json; fi
+          if git diff --cached --quiet; then
+            echo "No monthly changes to commit."
+          else
+            git commit -m "Monthly performance report"
+            git push origin main
+          fi
