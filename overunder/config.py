@@ -124,14 +124,10 @@ def _parse_freq_thresholds():
                 |    gf <= ga)          | A16 (away venue nowin rate, home market)
     ---------------------------------------------------------------------------
 
-       Override with env, e.g. (4/6 relaxed, 5/6 medium, 6/6 strict):
-         OU_FREQ="scored:4:2,conceded:4:2,over:4:2,blank:4:2,win:3:2,cs:5:3,
-                   btts_game:3:2,nowin:4:2"                                 -- relaxed (default)
-         OU_FREQ="scored:5:3,conceded:5:3,over:4:2,blank:4:2,win:3:2,cs:5:3,
-                   btts_game:3:2,nowin:4:2"                                 -- medium
-         OU_FREQ="scored:6:3,conceded:6:3,over:4:2,blank:4:2,win:3:2,cs:5:3,
-                   btts_game:3:2,nowin:4:2"                                 -- strict (fewest picks)
-       scored:4:2 means "scored in 4+/6 matches, fallback 2+/3 when <6 exist".
+       Defaults use the relaxed 4/6 (2/3 short-window) form thresholds for
+       scored, conceded, over, blank, and nowin. Win, clean-sheet, and BTTS
+       game thresholds retain their own category-specific defaults.
+       Override with env OU_FREQ to tune a category.
     """
     defaults = {
         "scored":   {"full": 4, "short": 2},
@@ -244,7 +240,37 @@ MARKET_SOLID = _parse_market_solid()
 # Bump this string whenever rules.py logic, check sets, gates, premium tiers,
 # or the confidence formula change. It is mixed into the predict_day cache
 # signature so stale picks computed under older rules are never served.
-RULES_VERSION = os.getenv("OU_RULES_VERSION", "2026-10-01.1-scored-4of6")
+RULES_VERSION = os.getenv("OU_RULES_VERSION", "2026-10-03.11-statarea-agreement-report")
+
+# -----------------------------------------------------------------------------
+# Supported + default-publish markets.
+#
+# ALL_MARKETS: every market the engine can compute for (used in settle/stats
+#   to report on historical picks even if no longer published going forward).
+# DEFAULT_PUBLISH_MARKETS: subset shipped to Telegram free/VIP chats by the
+#   default `predict`/`report` CLI invocations and by the GHA publish job.
+#   ORDER = presentation order in the VIP report.
+#
+# Real settled track record (2026-10-03, 742 settled picks) drives the cut:
+#   home_sc   240 picks  87.9%  profit +50.70   << KEEP
+#   away_sc   254 picks  84.6%  profit +42.30   << KEEP
+#   over       68 picks  73.5%  profit  +8.10   << KEEP
+#   btts       83 picks  67.5%  profit  +6.00   << KEEP
+#   over15     10 picks  100%   profit  +2.00   << KEEP (small N, perfect)
+#   home_dw    10 picks  90.0%  profit  +1.70   << KEEP (small N, perfect)
+#   home       41 picks  63.4%  profit  +2.70   << KEEP
+#   under35    12 picks  75.0%  profit  +1.50   << KEEP (rewritten rules)
+#   no_btts    10 picks  70.0%  profit  +0.40   << CUT (no ROI; opt-in)
+#   under      14 picks  42.9%  profit  +0.10   << CUT (below 50%; opt-in)
+#
+# User can ALWAYS restore any cut market by passing --markets on the CLI or
+# overriding the markets= string in GHA workflow_dispatch. The cut simply
+# removes them from the default publish list.
+ALL_MARKETS = ("over", "over15", "under", "under35",
+               "btts", "no_btts",
+               "home", "home_dw", "home_sc", "away_sc")
+DEFAULT_PUBLISH_MARKETS = ("over", "over15", "under35", "btts",
+                           "home", "home_dw", "home_sc", "away_sc")
 DEFAULT_ODDS = float(os.getenv("DEFAULT_ODDS", "2.0"))    # decimal odds for EV
 KELLY_FRACTION = float(os.getenv("KELLY_FRACTION", "0.35"))
 MAX_STAKE_PCT = float(os.getenv("MAX_STAKE_PCT", "0.3"))  # % of bankroll per pick
@@ -257,6 +283,7 @@ LEAGUE_AVG_AWAY_GOALS = float(os.getenv("LEAGUE_AVG_AWAY_GOALS", "1.15"))
 ST_OVER_MIN = int(os.getenv("ST_OVER_MIN", "70"))    # statarea Over 2.5 % we trust
 ST_UNDER_MAX = int(os.getenv("ST_UNDER_MAX", "40"))  # below -> treat as Under
 ST_HOME_MIN = int(os.getenv("ST_HOME_MIN", "55"))    # statarea home-win % we trust
+ST_BTTS_MIN = int(os.getenv("ST_BTTS_MIN", "55"))    # statarea BTTS % we trust
 ST_MIN_MATCHES = int(os.getenv("ST_MIN_MATCHES", "30"))  # sanity gate for parse
 FUZZY_MIN = float(os.getenv("FUZZY_MIN", "0.78"))
 

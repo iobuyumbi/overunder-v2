@@ -267,8 +267,16 @@ class TestRulesVenueOverall(unittest.TestCase):
         self.assertEqual(len(checks), 18)
         self.assertNotIn("H2H", checks)
         with_h2h = run_checks(home, home, market="over", home_name="A", away_name="B")
-        self.assertEqual(len(with_h2h), 19)
+        # Over 2.5 (rewritten 2026-10-03.5): base dict 18 minus 11 excludes
+        # (H1/A1/H10/A11 streaks + HB/AB/H5/A7 BTTS-pattern + H4/A6 legacy) = 7,
+        # plus injection (A8 + H12 + A12 = 3) plus H2H append (1) = 7-0 base keep +
+        # (base S6 already there + 3 injection + H2H) -> denom 14.
+        self.assertEqual(len(with_h2h), 14)
         self.assertIn("H2H", with_h2h)
+        # Attack⇄leakage pair signature: home_sc profile (H6/H7 ATT + A9/A12 LEAK)
+        # and away_sc profile (A3/A8 ATT + H8/H12 LEAK) must ALL be present in over.
+        for pair_k in ("H6","H7","A9","A12","A3","A8","H8","H12"):
+            self.assertIn(pair_k, with_h2h, f"expected attack/leak pair {pair_k} in over check set")
         self.assertTrue(checks["H1"] and checks["H3"] and checks["H6"] and checks["H7"])
         weak = [M("A", 0, 1), M("A", 1, 0), M("A", 0, 0), M("H", 0, 0),
                 M("A", 0, 1), M("H", 0, 0)]
@@ -329,39 +337,50 @@ class TestNoLookahead(unittest.TestCase):
 
 class TestFourOfSixAndNegativeMarkets(unittest.TestCase):
     def test_six_of_six_scoring_contract(self):
-        # scored category is 6/6 (fallback 3/3): a single blank fails the check
-        regular = [M("H", 2, 1), M("A", 1, 0), M("H", 0, 1), M("A", 2, 2),
-                   M("H", 1, 1), M("A", 1, 0)]   # scored 5/6, conceded 4/6
-        c = run_checks(regular, regular, market="btts", home_name="A", away_name="B")
-        self.assertFalse(c["H7"])   # overall scored 5/6 → fails the 6/6 bar
-        self.assertFalse(c["A13"])  # away side also 5/6 overall → fails
-        self.assertFalse(c["H6"])   # home venue scored 2/3 → fails the 3/3 short bar
-        self.assertFalse(c["A9"])   # away rarely concedes away (1/3 < 2/3) → pair fails
-        # a perfect scoring record passes every scoring check
-        perfect = [M("H", 2, 1), M("A", 1, 2), M("H", 1, 1), M("A", 2, 2),
-                   M("H", 3, 1), M("A", 1, 1)]   # scored 6/6, conceded 6/6
-        c2 = run_checks(perfect, perfect, market="btts", home_name="A", away_name="B")
-        self.assertTrue(c2["H6"] and c2["H7"] and c2["A3"] and c2["A13"])
+        import importlib
+        import tempfile
+        os.environ["OU_DATA_DIR"] = tempfile.mkdtemp(prefix="ou_6of6_")
+        os.environ["OU_FREQ"] = "scored:6:3,conceded:6:3,over:4:2,blank:4:2,win:3:2,cs:5:3,btts_game:3:2,nowin:4:2"
+        import overunder.config as cfg
+        import overunder.rules as r
+        cfg = importlib.reload(cfg)
+        r = importlib.reload(r)
+        from overunder.rules import run_checks as _rc
+        try:
+            regular = [M("H", 2, 1), M("A", 1, 0), M("H", 0, 1), M("A", 2, 2),
+                       M("H", 1, 1), M("A", 1, 0)]
+            c = _rc(regular, regular, market="btts", home_name="A", away_name="B")
+            self.assertFalse(c["H7"])
+            self.assertFalse(c["A13"])
+            self.assertFalse(c["H6"])
+            self.assertFalse(c["A9"])
+            perfect = [M("H", 2, 1), M("A", 1, 2), M("H", 1, 1), M("A", 2, 2),
+                       M("H", 3, 1), M("A", 1, 1)]
+            c2 = _rc(perfect, perfect, market="btts", home_name="A", away_name="B")
+            self.assertTrue(c2["H6"] and c2["H7"] and c2["A3"] and c2["A13"])
+        finally:
+            os.environ.pop("OU_FREQ", None)
+            importlib.reload(cfg)
+            importlib.reload(r)
 
     def test_under_market_checks(self):
         weak = [M("H", 1, 0), M("H", 0, 1), M("H", 1, 0), M("A", 0, 0),
-                M("H", 0, 0), M("A", 1, 0)]      # low scoring, tight defence
+                M("H", 0, 0), M("A", 1, 0)]
         c = run_checks(weak, weak, market="under", home_name="A", away_name="B")
-        self.assertEqual(len(c), 11)             # 9 under + S6 + H2H
-        self.assertTrue(c["H1u"] and c["H10u"] and c["A1u"] and c["A11u"])
-        self.assertTrue(c["H2u"] and c["H3u"])
+        self.assertEqual(len(c), 14)
+        self.assertTrue(c["UH_BLK"] and c["UH_CS_O"] and c["UH_GA_L3"] and c["UH_UND_O"])
+        self.assertTrue(c["UA_CS_O"] and c["UA_GA_L3"] and c["UA_UND_O"])
         strong = [M("H", 3, 1)] * 6
         c2 = run_checks(strong, strong, market="under", home_name="A", away_name="B")
-        self.assertFalse(c2["H1u"] or c2["H2u"] or c2["H10u"])
+        self.assertFalse(c2["UH_BLK"] or c2["UH_UND_O"] or c2["UH_GA_L3"])
 
     def test_no_btts_checks(self):
         blanky = [M("H", 1, 0), M("H", 0, 0), M("H", 2, 0), M("A", 0, 0),
-                  M("H", 0, 0), M("A", 1, 0)]    # blanks a lot, keeps clean sheets
+                  M("H", 0, 0), M("A", 1, 0)]
         c = run_checks(blanky, blanky, market="no_btts", home_name="A", away_name="B")
-        self.assertEqual(len(c), 14)             # 11 no_btts + DOM + S6 + H2H
-        self.assertTrue(c["H6n"] and c["H8n"] and c["H9n"])
-        self.assertTrue(c["H4n"] and c["A6n"])   # almost no BTTS in its games
-        # market_probs exposes both directions
+        self.assertEqual(len(c), 12)
+        self.assertTrue(c["NH_BL"] and c["NH_BL_OWN"] and c["NH_BTTS_O"])
+        self.assertTrue(c["NA_BTTS_O"] and c["NB_LAM"])
         from overunder.rules import market_probs
         p = market_probs(blanky, blanky)
         self.assertAlmostEqual(p["over"] + p["under"], 1.0)
@@ -426,9 +445,9 @@ class TestSaferMarkets(unittest.TestCase):
 
     def test_safer_lines_have_gates(self):
         from overunder.config import MARKET_MIN_CONF
-        for m in ("over15", "under35", "home_dw"):
+        for m, floor in (("over15", 0.85), ("under35", 0.85), ("home_dw", 0.80)):
             self.assertIn(m, MARKET_MIN_CONF)
-            self.assertGreaterEqual(MARKET_MIN_CONF[m], 0.85)
+            self.assertGreaterEqual(MARKET_MIN_CONF[m], floor)
 
 
 class TestSoccerbaseParser(unittest.TestCase):

@@ -30,24 +30,54 @@ MARKET_LABEL = {"over": "Over 2.5", "under": "Under 2.5", "btts": "BTTS",
 # Every key here MUST exist in that market's check dict in rules.run_checks.
 # DESIGN NOTE: btts = home_sc U away_sc (literal set union in run_checks)
 #   home_sc CORE_CHECKS + away_sc CORE_CHECKS minus S6 overlap = btts CORE_CHECKS
+#
+# Over/Over15 (rewritten 2026-10-03.5): symmetric attack⇄leakage pairs —
+# home_sc profile (H6/H7 ATT + A9/A12 LEAK) + away_sc profile (A3/A8 ATT +
+# H8/H12 LEAK) + pure over-rate 50% bars (H2/H3 + A4/A5) + H2H.
+# Over 2.5 must also pass O_PATH: at least one full attack-v-leakage pair, or
+# open-game evidence paired with the other team's full scoring/conceding form.
+# Negative markets (under/under35/no_btts) use INDEPENDENT check IDs with
+# semantic prefixes UH_/UA_/U35_/NH_/NA_/NB_ (not u/n suffix mirrors).
 CORE_CHECKS = {
-    "over":    ["H1", "A1", "H6", "A3", "A8", "A9", "H8", "A11", "H10",
-                "HB", "AB", "H2", "A4", "H2H"],
-    "under":   ["H1u", "H2u", "H3u", "A1u", "A3u", "A4u", "A5u",
-                "H10u", "A11u", "H2H"],
+    "over":    ["H6", "H7", "A9", "A12",
+                "A3", "A8", "H8", "H12",
+                "H2", "H3", "A4", "A5", "O_PATH", "H2H"],
+    "under":   ["UH_BLK", "UH_CS", "UH_BLK_O", "UH_CS_O",
+                "UH_GA_L3",
+                "UA_BLK", "UA_CS", "UA_BLK_O", "UA_CS_O",
+                "UA_GA_L3",
+                "UH_UND_O", "UA_UND_O",
+                "H2H"],
     "btts":    ["H6", "H7", "A9", "A12",
                 "A3", "A13", "H8", "H12", "H2H"],
-    "no_btts": ["H4n", "H5n", "H6n", "H8n", "H9n", "A3n", "A6n", "A7n", "A8n",
-                "A9n", "A10n", "DOM", "H2H"],
-    "home":    ["H6", "H7", "H16",
-                "A9", "A12", "A16", "H14", "H15", "H2H"],
+    "no_btts": ["NH_BL", "NH_BL_OWN", "NH_BL_O",
+                "NA_BL", "NA_BL_OWN", "NA_BL_O",
+                "NH_BTTS_O", "NA_BTTS_O",
+                "NB_BOTH", "NB_LAM",
+                "H2H"],
+    "home":    ["H6", "H7", "A9", "A12", "H14", "A16", "H16", "H2H"],
     "home_sc": ["H6", "H7", "S6", "A9", "A12", "H2H"],
     "away_sc": ["A3", "A13", "S6", "H8", "H12", "H2H"],
-    "over15":  ["H2", "H3", "A3", "A4", "A5", "A8", "HB", "AB", "H2H"],
-    "under35": ["H1u", "H2u", "H3u", "A1u", "A3u", "A4u", "A5u",
-                "H10u", "A11u", "H2H"],
+    "over15":  ["H6", "A9", "A12",
+                "A3", "A8", "H8", "H12",
+                "H2", "H3", "A4", "A5", "H2H"],
+    "under35": ["UH_BLK", "UH_CS",
+                "UA_BLK", "UA_CS",
+                "U35_NOHI", "U35_NOAI", "U35_NOHI_O", "U35_NOAI_O",
+                "UH_UND", "UA_UND", "UH_UND_O", "UA_UND_O",
+                "H2H"],
     "home_dw": ["H6", "H7", "A9", "A12",
                 "H14", "H15", "A14", "A15", "A17", "A18", "H2H"],
+}
+
+# These scored/conceded patterns are eligibility requirements, not soft votes
+# in the confidence blend. FREQ_CFG supplies the active per-category bars.
+REQUIRED_MARKET_CHECKS = {
+    "home": ("H6", "H7", "A9", "A12", "H14", "A16"),
+    "home_dw": ("H6", "H7", "A9", "A12", "H14", "A14"),
+    "home_sc": ("H6", "H7", "A9", "A12"),
+    "away_sc": ("A3", "A13", "H8", "H12"),
+    "btts": ("H6", "H7", "H8", "H12", "A3", "A13", "A9", "A12"),
 }
 
 
@@ -57,13 +87,17 @@ def build_pick(fixture, provider, market="over", odds=DEFAULT_ODDS, before=None)
     before = before if before is not None else fixture.get("date")
     home_ms = provider.team_matches(fixture["home"], before=before)
     away_ms = provider.team_matches(fixture["away"], before=before)
-    from .rules import run_checks
+    lam_h, lam_a = lambdas(home_ms, away_ms)
+    from .rules import over_path_passes, run_checks
     checks = run_checks(home_ms, away_ms, market=market,
-                        home_name=fixture["home"], away_name=fixture["away"])
+                        home_name=fixture["home"], away_name=fixture["away"],
+                        lam_h=lam_h, lam_a=lam_a)
+    over_path_passed = (over_path_passes(home_ms, away_ms, checks)
+                        if market == "over" else True)
+    required_checks_passed = all(checks[k] for k in REQUIRED_MARKET_CHECKS.get(market, ()))
     passed = sum(checks.values())
     probs = market_probs(home_ms, away_ms)
     p = probs[market]
-    lam_h, lam_a = lambdas(home_ms, away_ms)
 
     def gpg(ms, venue=None, key="gf"):
         sel = [m for m in ms if venue is None or m["venue"] == venue]
@@ -87,7 +121,8 @@ def build_pick(fixture, provider, market="over", odds=DEFAULT_ODDS, before=None)
     lo, hi = xg_forecast(lam_h, lam_a)
 
     core = CORE_CHECKS.get(market, [])
-    missed = [f"{CHECK_NAMES[k]} (failed)" for k in core if not checks[k]]
+    missed = [f"{CHECK_NAMES[k]} (failed)" for k in core
+              if (not over_path_passed if k == "O_PATH" else not checks[k])]
 
     line_by_market = {"over": 2.5, "under": 2.5, "over15": 1.5,
                       "under35": 3.5, "btts": None, "no_btts": None,
@@ -97,10 +132,13 @@ def build_pick(fixture, provider, market="over", odds=DEFAULT_ODDS, before=None)
         "date": fixture["date"], "league": fixture["league"],
         "home": fixture["home"], "away": fixture["away"],
         "market": market, "label": MARKET_LABEL[market],
+        "rules_version": RULES_VERSION,
         "line": line_by_market.get(market),
         "confidence": conf, "model_p": round(p, 3),
         "checks_passed": passed, "checks_total": total,
         "check_ratio": check_ratio,
+        "over_path_passed": over_path_passed,
+        "required_checks_passed": required_checks_passed,
         "missed": missed, "ev": ev, "edge_pct": round(ev * 100, 1),
         "stake_pct": stake, "odds": odds_v, "tier": tier,
         "xg": [lo, hi],
@@ -202,7 +240,9 @@ def predict_day(provider, day=None, markets=("over",), odds=DEFAULT_ODDS,
                 solid_thr = MARKET_SOLID.get(mkt, thr)
             else:
                 solid_thr = thr
-            if p["confidence"] >= solid_thr:
+            if (p.get("required_checks_passed", False) and
+                    (mkt != "over" or p.get("over_path_passed", False))) and \
+                    p["confidence"] >= solid_thr:
                 if league_caution:
                     from .leagues import league_key
                     pair_stats, blocked = league_caution

@@ -10,7 +10,7 @@ from datetime import date
 
 import requests
 
-from .config import (CACHE_DIR, FUZZY_MIN, JINA_PROXY, ST_HOME_MIN, ST_MIN_MATCHES,
+from .config import (CACHE_DIR, FUZZY_MIN, JINA_PROXY, ST_BTTS_MIN, ST_HOME_MIN, ST_MIN_MATCHES,
                      ST_OVER_MIN, ST_UNDER_MAX, STATAREA_URL)
 from .teams import find_match
 
@@ -201,6 +201,8 @@ def cross_check(picks, games, over_min=ST_OVER_MIN, under_max=ST_UNDER_MAX, home
                 sig = "AGREE_UNDER"
             elif mkt in ("home", "1") and g["p_home"] >= home_min:
                 sig = "AGREE_HOME"
+            elif mkt == "btts" and g["p_btts"] >= ST_BTTS_MIN:
+                sig = "AGREE_BTTS"
             elif mkt == "home_sc" and g["p_home"] >= home_min:
                 sig = "AGREE_HOME_SCORE"      # strong home side usually scores
             elif mkt == "away_sc" and g["p_away"] >= 50:

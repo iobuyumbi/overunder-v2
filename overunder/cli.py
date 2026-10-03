@@ -704,7 +704,8 @@ def cmd_report(args):
     # banner, creating the JSON↔report mismatch the user observed.  Yesterday
     # record banner and stats still read h["settled"] independently.
     pending_in_window = [p for p in h["pending"]
-                         if p["date"] in date_set and p.get("market") in mkts]
+                         if p["date"] in date_set and p.get("market") in mkts
+                         and p.get("rules_version") == config.RULES_VERSION]
     # Within pending (per date), a late predict re-run under a newer
     # RULES_VERSION may have produced a duplicate key.  De-duplicate keeping
     # the most recently-recorded (the new one).
@@ -719,7 +720,7 @@ def cmd_report(args):
     if deduped:
         picks = deduped
         print(f"report: loaded {len(picks)} pending (upcoming) picks from history "
-              f"for {len(date_window)} day(s)",
+              f"for {len(date_window)} day(s) under rules {config.RULES_VERSION}",
               file=sys.stderr)
         hist_mkts = {p.get("market") for p in pending_in_window}
         missing = [m for m in mkts if m not in hist_mkts]
@@ -742,7 +743,8 @@ def cmd_report(args):
                 picks += predict_day(prov, day=d, markets=mkts)
             except RuntimeError as e:
                 print(f"report: no fixtures for {d} ({e})", file=sys.stderr)
-        print(f"report: predicted {len(picks)} picks live (no pending history found)",
+        print(f"report: predicted {len(picks)} picks live (no current-version pending "
+              f"history found; rules {config.RULES_VERSION})",
               file=sys.stderr)
     for d in date_window:
         day_diag[d]["qualified"] = sum(1 for p in picks if p["date"] == d)
@@ -786,7 +788,7 @@ def main(argv=None):
         p.add_argument("--telegram", action="store_true")
 
     p = sub.add_parser("demo"); common(p); p.add_argument("--out")
-    p.add_argument("--markets", default="over,btts,home,home_sc,away_sc,over15,home_dw")
+    p.add_argument("--markets", default=",".join(config.DEFAULT_PUBLISH_MARKETS))
     p.set_defaults(fn=cmd_demo)
     p = sub.add_parser("predict"); common(p); p.add_argument("--odds", type=float, default=config.DEFAULT_ODDS)
     p.add_argument("--statarea", action="store_true"); p.add_argument("--card")
@@ -806,7 +808,7 @@ def main(argv=None):
                    help="min settled picks before a pair can be avoided (default 6)")
     p.set_defaults(fn=cmd_leagues)
     p = sub.add_parser("report"); common(p)
-    p.add_argument("--markets", default="over,over15,btts,home,home_dw,home_sc,away_sc")
+    p.add_argument("--markets", default=",".join(config.DEFAULT_PUBLISH_MARKETS))
     p.add_argument("--days", type=int, default=1)
     p.set_defaults(fn=cmd_report)
     p = sub.add_parser("scrape-check"); p.add_argument("--date", default=None)
@@ -829,7 +831,7 @@ def main(argv=None):
     p = sub.add_parser("verify"); p.add_argument("--n", type=int, default=50)
     p.set_defaults(fn=cmd_verify)
     p = sub.add_parser("backtest"); p.add_argument("--days", type=int, default=30)
-    p.add_argument("--markets", default="over,over15,btts,home,home_dw,home_sc,away_sc")
+    p.add_argument("--markets", default=",".join(config.DEFAULT_PUBLISH_MARKETS))
     p.add_argument("--odds", type=float, default=config.DEFAULT_ODDS)
     p.add_argument("--min-conf", type=float, default=config.O25_MIN_CONFIDENCE)
     p.add_argument("--verbose", action="store_true", help="print every replayed pick")

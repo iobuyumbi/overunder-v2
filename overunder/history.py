@@ -6,7 +6,7 @@ import sys
 import time
 import uuid
 
-from .config import HISTORY_FILE
+from .config import HISTORY_FILE, RULES_VERSION
 from .teams import normalize as _norm
 
 
@@ -74,6 +74,7 @@ def record_picks(picks):
         if key in settled_keys:
             continue
         rec = dict(p)
+        rec["rules_version"] = RULES_VERSION
         if key in pending_by_key:
             old_id = h["pending"][pending_by_key[key]].get("id")
             if old_id:

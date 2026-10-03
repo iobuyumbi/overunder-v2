@@ -120,6 +120,32 @@ def render_report(picks, day=None, title="Over2.5 + Over1.5 + BTTS + Home/DC",
                 lines.append("")
         lines.append("---")
         lines.append("")
+    agreed = [p for p in picks
+              if str(p.get("statarea_signal", "")).startswith("AGREE_")]
+    lines.append("📌 MODEL PICKS ALIGNED WITH STATAREA")
+    lines.append("")
+    if not agreed:
+        lines.append("  No tagged picks agree with Statarea in this report window.")
+    else:
+        labels = {
+            "AGREE_OVER": "Statarea agrees: Over 2.5",
+            "AGREE_UNDER": "Statarea agrees: Under 2.5",
+            "AGREE_HOME": "Statarea agrees: Home win",
+            "AGREE_HOME_SCORE": "Statarea agrees: Home team to score",
+            "AGREE_AWAY_SCORE": "Statarea agrees: Away team to score",
+            "AGREE_BTTS": "Statarea agrees: BTTS",
+            "AGREE_NO_BTTS": "Statarea agrees: BTTS No",
+            "AGREE_OVER15": "Statarea agrees: Over 1.5",
+            "AGREE_UNDER35": "Statarea agrees: Under 3.5",
+            "AGREE_HOME_DW": "Statarea agrees: Home or Draw",
+        }
+        for p in sorted(agreed, key=lambda x: (x["date"], -x["confidence"])):
+            signal = p.get("statarea_signal", "")
+            lines.append(
+                f"  • {p['date']} — {p['home']} vs {p['away']} — "
+                f"{p.get('label', p['market'])} "
+                f"({p['confidence']*100:.1f}% model) — {labels.get(signal, signal)}")
+    lines.append("")
     return "\n".join(lines)
 
 
@@ -128,6 +154,11 @@ def _pick_block(p):
     sig_note = {"AGREE_OVER": "✓ statarea agrees",
                 "AGREE_OVER15": "✓ statarea agrees (O15)",
                 "AGREE_HOME_DW": "✓ statarea agrees (DC 1X)",
+                "AGREE_BTTS": "✓ statarea agrees (BTTS)",
+                "AGREE_HOME_SCORE": "✓ statarea agrees (home score)",
+                "AGREE_AWAY_SCORE": "✓ statarea agrees (away score)",
+                "AGREE_NO_BTTS": "✓ statarea agrees (BTTS No)",
+                "AGREE_UNDER35": "✓ statarea agrees (U3.5)",
                 "AGREE_UNDER": "✗ statarea leans UNDER",
                 "AGREE_HOME": "✓ statarea home ≥55",
                 "DIVERGE": f"~ statarea O25 {p['statarea']['over25']}% (diverges)" if p.get("statarea") else "~ diverges",
