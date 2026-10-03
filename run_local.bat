@@ -22,9 +22,9 @@ if "%~1"=="demo" (
         python -m overunder scrape-check
     )
     echo ===== PREDICT =====
-    python -m overunder predict --statarea --days 2 --markets over,under,btts,no_btts,home,home_sc,away_sc
+    python -m overunder predict --statarea --days 2 --markets over,over15,under,under35,btts,no_btts,home,home_dw,home_sc,away_sc
     echo ===== REPORT =====
-    python -m overunder report --days 2 --markets over,under,btts,no_btts,home,home_sc,away_sc
+    python -m overunder report --days 2 --markets over,over15,under,under35,btts,no_btts,home,home_dw,home_sc,away_sc
     echo ===== SETTLE =====
     python -m overunder settle
     echo ===== STATS =====
