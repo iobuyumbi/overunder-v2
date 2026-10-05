@@ -1,0 +1,63 @@
+== PREDICTION STATS ==
+OVERALL      all             14 picks  11W-3L   78.6%  profit +2.30
+BY STATAREA SIGNAL:
+  AGREE_AWAY_SCORE   1 picks  0W-1L    0.0%  profit -0.30
+  AGREE_HOME       1 picks  1W-0L  100.0%  profit +0.30
+  AGREE_HOME_DW    2 picks  2W-0L  100.0%  profit +0.60
+  AGREE_HOME_SCORE   2 picks  2W-0L  100.0%  profit +0.60
+  AGREE_UNDER      3 picks  2W-1L   66.7%  profit +0.30
+  DIVERGE          1 picks  1W-0L  100.0%  profit +0.20
+  NOT_FOUND        3 picks  2W-1L   66.7%  profit +0.30
+  none             1 picks  1W-0L  100.0%  profit +0.30
+BY MARKET:
+  away_sc          3 picks  2W-1L   66.7%  profit +0.20
+  home             1 picks  1W-0L  100.0%  profit +0.30
+  home_dw          2 picks  2W-0L  100.0%  profit +0.60
+  home_sc          3 picks  3W-0L  100.0%  profit +0.90
+  under35          5 picks  3W-2L   60.0%  profit +0.30
+BY TIER:
+  ✅ Solid          4 picks  3W-1L   75.0%  profit +0.50
+  🔥 Premium       10 picks  8W-2L   80.0%  profit +1.80
+BY LEAGUE:
+  Argentina Primera Nacional   4 picks  3W-1L   75.0%  profit +0.60
+  Colombia Prim A Finalizacion   1 picks  1W-0L  100.0%  profit +0.30
+  Liga Prof Argentina Torneo   1 picks  1W-0L  100.0%  profit +0.20
+  Nations League   4 picks  3W-1L   75.0%  profit +0.60
+  Northern Irish Premier League   1 picks  1W-0L  100.0%  profit +0.30
+  Spanish Segunda   2 picks  1W-1L   50.0%  profit +0.00
+  Uruguay Primera Clausura   1 picks  1W-0L  100.0%  profit +0.30
+pending: 6   settled: 14
+== LEAGUE HEALTH (last 30d, min 6 picks) ==
+saved -> /home/runner/work/overunder-v2/overunder-v2/data/league_health.json
+
+  spanish segunda   2 picks 1W-1L  +0.00u
+     under35     1 picks  0W-1L    0.0%  -0.30u
+     home_sc     1 picks  1W-0L  100.0%  +0.30u
+
+  liga prof argentina torneo   1 picks 1W-0L  +0.20u
+     away_sc     1 picks  1W-0L  100.0%  +0.20u
+
+  colombia prim a finalizacion   1 picks 1W-0L  +0.30u
+     home_sc     1 picks  1W-0L  100.0%  +0.30u
+
+  northern irish premier league   1 picks 1W-0L  +0.30u
+     away_sc     1 picks  1W-0L  100.0%  +0.30u
+
+  uruguay primera clausura   1 picks 1W-0L  +0.30u
+     under35     1 picks  1W-0L  100.0%  +0.30u
+
+  argentina primera nacional   4 picks 3W-1L  +0.60u
+     under35     3 picks  2W-1L   66.7%  +0.30u
+     home_dw     1 picks  1W-0L  100.0%  +0.30u
+
+  nations league   4 picks 3W-1L  +0.60u
+     away_sc     1 picks  0W-1L    0.0%  -0.30u
+     home        1 picks  1W-0L  100.0%  +0.30u
+     home_dw     1 picks  1W-0L  100.0%  +0.30u
+     home_sc     1 picks  1W-0L  100.0%  +0.30u
+
+no leagues on the caution list right now
+usage: overunder [-h]
+                 {demo,predict,compare,settle,stats,leagues,report,scrape-check,team-stats,recent,pending,void,retag,backfill,verify,backtest,fetch-statarea}
+                 ...
+overunder: error: unrecognized arguments: -n 50

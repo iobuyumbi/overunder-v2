@@ -1,0 +1,117 @@
+{
+  "computed_at": "2026-10-05 09:53:39",
+  "window_days": 30,
+  "min_picks": 6,
+  "leagues": {
+    "argentina primera nacional": {
+      "under35": {
+        "n": 3,
+        "w": 2,
+        "l": 1,
+        "profit": 0.3,
+        "win_pct": 66.7,
+        "caution": false
+      },
+      "home_dw": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "caution": false
+      }
+    },
+    "spanish segunda": {
+      "under35": {
+        "n": 1,
+        "w": 0,
+        "l": 1,
+        "profit": -0.3,
+        "win_pct": 0.0,
+        "caution": false
+      },
+      "home_sc": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "caution": false
+      }
+    },
+    "nations league": {
+      "home": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "caution": false
+      },
+      "home_dw": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "caution": false
+      },
+      "home_sc": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "caution": false
+      },
+      "away_sc": {
+        "n": 1,
+        "w": 0,
+        "l": 1,
+        "profit": -0.3,
+        "win_pct": 0.0,
+        "caution": false
+      }
+    },
+    "northern irish premier league": {
+      "away_sc": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "caution": false
+      }
+    },
+    "liga prof argentina torneo": {
+      "away_sc": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.2,
+        "win_pct": 100.0,
+        "caution": false
+      }
+    },
+    "uruguay primera clausura": {
+      "under35": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "caution": false
+      }
+    },
+    "colombia prim a finalizacion": {
+      "home_sc": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "caution": false
+      }
+    }
+  }
+}
