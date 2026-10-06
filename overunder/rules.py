@@ -514,6 +514,19 @@ def _no_btts_checks(home_ms, away_ms, lam_h, lam_a):
     return checks
 
 
+def home_sc_leak_path_passes(checks):
+    """Home scoring evidence paired with the away side's conceding record."""
+    return bool(checks["H6"] and checks["H7"]
+                and checks["A9"] and checks["A12"])
+
+
+def away_sc_leak_path_passes(checks):
+    """Away scoring evidence paired with the home side's conceding record."""
+    overall_scoring = checks.get("A13", checks.get("A8", False))
+    return bool(checks["A3"] and overall_scoring
+                and checks["H8"] and checks["H12"])
+
+
 def over_attack_leak_path_passes(checks):
     """A scoring profile paired with the opposing team's leakage profile.
 
@@ -521,11 +534,8 @@ def over_attack_leak_path_passes(checks):
     deliberately not required for this route: one side can produce all three
     goals while the opponent's defensive record supplies the matchup evidence.
     """
-    home_attack_away_leak = (
-        checks["H6"] and checks["H7"] and checks["A9"] and checks["A12"])
-    away_attack_home_leak = (
-        checks["A3"] and checks["A8"] and checks["H8"] and checks["H12"])
-    return bool(home_attack_away_leak or away_attack_home_leak)
+    return (home_sc_leak_path_passes(checks)
+            or away_sc_leak_path_passes(checks))
 
 
 def over_path_passes(home_ms, away_ms, checks):

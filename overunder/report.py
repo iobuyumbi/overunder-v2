@@ -189,13 +189,13 @@ def _pick_block(p):
         f"     Profile: {p['checks_passed']}/{p['checks_total']} checks passed",
     ]
     if p.get("over_directional_path_passed"):
-        b.append("     Over evidence: one team's scoring form meets the opponent's "
-                 "conceding form; the other two signals are optional")
+        b.append("     Directional evidence: scoring form meets the opponent's "
+                 "conceding form; the reverse signals are optional")
     if p.get("missed"):
         shown = "; ".join(p["missed"][:3])
         more = f" (+{len(p['missed'])-3} more)" if len(p["missed"]) > 3 else ""
         failed_label = ("Optional checks that failed" if
-                        p.get("over_directional_path_passed") else "Missed")
+                        p.get("directional_path_passed") else "Missed")
         b.append(f"     {failed_label}: {shown}{more}")
     if p.get("league_caution"):
         b.append(f"     ⚠ CAUTION: {p['league_caution']}")

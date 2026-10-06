@@ -75,7 +75,7 @@ CORE_CHECKS = {
 # These scored/conceded patterns are eligibility requirements, not soft votes
 # in the confidence blend. FREQ_CFG supplies the active per-category bars.
 REQUIRED_MARKET_CHECKS = {
-    "home": ("H6", "H7", "A9", "A12", "H14", "A16"),
+    "home": ("H6", "H7", "A9", "A12"),
     "home_dw": ("H6", "H7", "A9", "A12", "H14", "A14"),
     "home_sc": ("H6", "H7", "A9", "A12"),
     "away_sc": ("A3", "A13", "H8", "H12"),
@@ -96,7 +96,9 @@ def build_pick(fixture, provider, market="over", odds=DEFAULT_ODDS, before=None,
     home_ms = provider.team_matches(fixture["home"], before=before)
     away_ms = provider.team_matches(fixture["away"], before=before)
     lam_h, lam_a = lambdas(home_ms, away_ms)
-    from .rules import (over_attack_leak_path_passes, over_path_passes,
+    from .rules import (away_sc_leak_path_passes,
+                        home_sc_leak_path_passes,
+                        over_attack_leak_path_passes, over_path_passes,
                         run_checks)
     checks = run_checks(home_ms, away_ms, market=market,
                         home_name=fixture["home"], away_name=fixture["away"],
@@ -105,6 +107,14 @@ def build_pick(fixture, provider, market="over", odds=DEFAULT_ODDS, before=None,
                         if market == "over" else True)
     over_directional_path = (market == "over"
                              and over_attack_leak_path_passes(checks))
+    directional_path = (
+        over_directional_path
+        or (market in ("home", "home_sc")
+            and home_sc_leak_path_passes(checks))
+        or (market == "away_sc" and away_sc_leak_path_passes(checks))
+        or (market == "btts"
+            and home_sc_leak_path_passes(checks)
+            and away_sc_leak_path_passes(checks)))
     required = list(REQUIRED_MARKET_CHECKS.get(market, ()))
     required_set = set(required)
     required_checks_passed = all(checks[k] for k in required)
@@ -121,7 +131,7 @@ def build_pick(fixture, provider, market="over", odds=DEFAULT_ODDS, before=None,
     # When a strong scoring profile meets the other side's leakage profile,
     # don't dilute the Over estimate with the scorer's defensive weakness or
     # the opponent's attacking form: either can be irrelevant to 3 total goals.
-    relevant_ratio = 1.0 if over_directional_path else check_ratio
+    relevant_ratio = 1.0 if directional_path else check_ratio
     conf = min(0.98, p * (0.70 + 0.30 * relevant_ratio)) if total else 0.0
     conf = round(conf, 3)
     if isinstance(odds, dict):
@@ -153,8 +163,9 @@ def build_pick(fixture, provider, market="over", odds=DEFAULT_ODDS, before=None,
         "check_ratio": check_ratio,
         "over_path_passed": over_path_passed,
         "over_directional_path_passed": over_directional_path,
+        "directional_path_passed": directional_path,
         "confidence_basis": ("directional attack vs opposing leakage"
-                             if over_directional_path
+                             if directional_path
                              else "market probability blended with check ratio"),
         "required_checks_passed": required_checks_passed,
         "missed": missed, "ev": ev, "edge_pct": round(ev * 100, 1),
@@ -277,6 +288,7 @@ def predict_day(provider, day=None, markets=("over",), odds=DEFAULT_ODDS,
                         "checks_passed": 0, "checks_total": 0,
                         "check_ratio": 0.0, "over_path_passed": False,
                         "over_directional_path_passed": False,
+                        "directional_path_passed": False,
                         "required_checks_passed": False, "missed": [],
                         "ev": 0.0, "edge_pct": 0.0, "stake_pct": 0.0,
                         "odds": (float(odds.get(mkt, DEFAULT_ODDS))

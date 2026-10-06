@@ -24,7 +24,7 @@ if "%~1"=="demo" (
     echo ===== PREDICT =====
     python -m overunder predict --statarea --days 2 --markets over,over15,under,under35,btts,no_btts,home,home_dw,home_sc,away_sc
     echo ===== OVER 2.5 AUDIT (GATED FIXTURES) =====
-    python -m overunder fixture-audit --days 2 --markets over --verdict GATE
+    python -m overunder fixture-audit --days 2 --markets over,home,home_sc,away_sc,btts --verdict GATE
     echo ===== REPORT =====
     python -m overunder report --days 2 --markets over,over15,under,under35,btts,no_btts,home,home_dw,home_sc,away_sc
     echo ===== SETTLE =====

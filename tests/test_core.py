@@ -210,6 +210,72 @@ class TestDirectionalOverPath(unittest.TestCase):
         self.assertGreaterEqual(picks[0]["confidence"], 0.68)
 
 
+class TestDirectionalScoringMarkets(unittest.TestCase):
+    def test_home_and_away_scoring_paths(self):
+        from overunder.rules import (home_sc_leak_path_passes,
+                                     away_sc_leak_path_passes)
+        self.assertTrue(home_sc_leak_path_passes({
+            "H6": True, "H7": True, "A9": True, "A12": True}))
+        self.assertFalse(home_sc_leak_path_passes({
+            "H6": True, "H7": True, "A9": False, "A12": True}))
+        self.assertTrue(away_sc_leak_path_passes({
+            "A3": True, "A13": True, "H8": True, "H12": True}))
+        self.assertFalse(away_sc_leak_path_passes({
+            "A3": True, "A13": True, "H8": True, "H12": False}))
+
+    def test_btts_path_requires_both_directional_pairs(self):
+        from overunder.rules import (home_sc_leak_path_passes,
+                                     away_sc_leak_path_passes)
+        checks = {"H6": True, "H7": True, "A9": True, "A12": True,
+                  "A3": True, "A13": True, "H8": True, "H12": True}
+        self.assertTrue(home_sc_leak_path_passes(checks)
+                        and away_sc_leak_path_passes(checks))
+        checks["H12"] = False
+        self.assertFalse(home_sc_leak_path_passes(checks)
+                         and away_sc_leak_path_passes(checks))
+
+    def test_home_win_no_longer_requires_extra_form_checks(self):
+        from overunder.predict import REQUIRED_MARKET_CHECKS
+        self.assertEqual(REQUIRED_MARKET_CHECKS["home"],
+                         ("H6", "H7", "A9", "A12"))
+
+    def test_btts_uses_both_directional_paths(self):
+        class BothScoreAndConcedeProvider:
+            def team_matches(self, team, before=None):
+                if team == "Home":
+                    return [M("H", 2, 1) for _ in range(6)]
+                return [M("A", 1, 2) for _ in range(6)]
+
+        fixture = {"date": "2026-09-10", "league": "Example",
+                   "home": "Home", "away": "Away"}
+        pick = build_pick(fixture, BothScoreAndConcedeProvider(), market="btts")
+        self.assertTrue(pick["directional_path_passed"])
+        self.assertTrue(pick["required_checks_passed"])
+        self.assertEqual(pick["confidence"], pick["model_p"])
+
+    def test_one_team_markets_use_only_the_directional_path_for_confidence(self):
+        class HomeScProvider:
+            def team_matches(self, team, before=None):
+                return ([M("H", 3, 0) for _ in range(6)] if team == "Home"
+                        else [M("A", 0, 3) for _ in range(6)])
+
+        class AwayScProvider:
+            def team_matches(self, team, before=None):
+                return ([M("H", 0, 3) for _ in range(6)] if team == "Home"
+                        else [M("A", 3, 0) for _ in range(6)])
+
+        fx = {"date": "2026-09-10", "league": "Example",
+              "home": "Home", "away": "Away"}
+        for market, provider in (("home", HomeScProvider()),
+                                 ("home_sc", HomeScProvider()),
+                                 ("away_sc", AwayScProvider())):
+            with self.subTest(market=market):
+                pick = build_pick(fx, provider, market=market,
+                                  include_gate_audit=True)
+                self.assertTrue(pick["directional_path_passed"])
+                self.assertEqual(pick["confidence"], pick["model_p"])
+
+
 class TestStatareaHeaderLeak(unittest.TestCase):
     """Regression: column headers '1'/'2' must not leak into the 11 stats.
     Inter vs Udinese real card row: 71 20 9 51 32 17 90 68 45 49 51 -> over25=68."""
