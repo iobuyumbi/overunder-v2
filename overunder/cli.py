@@ -55,8 +55,8 @@ def _maybe_tag_statarea(picks, args):
                   file=sys.stderr)
             return picks
         tagged = st.cross_check(picks, games)
-        # home win: a statarea divergence is a red flag, not a footnote --
-        # an AGREE_HOME tag or no card at all still ships, DIVERGE does not
+        if getattr(args, "no_statarea_filter", False):
+            return tagged
         return [p for p in tagged
                 if not (p.get("market") == "home"
                         and p.get("statarea_signal") == "DIVERGE")]
@@ -91,14 +91,11 @@ def cmd_predict(args):
     prov = _provider(args.demo)
     mkts = _markets(args.markets)
     picks = []
-    demo_bypass = {} if args.demo else None
-    # live runs TAG picks from leagues/pairs the health tracker has flagged
-    # as pattern-hostile -- caution only, never blocked
+    show_all = bool(getattr(args, "show_all", False))
+    demo_bypass = {} if (args.demo and not show_all) else (None if not args.demo else {})
     caution = None
     if not args.demo and not config.LEAGUE_AVOID_DISABLE:
         from . import leagues as lg
-        # Always recompute health fresh so settled results after the last save are
-        # included (load_health reads stale disk JSON otherwise).
         try:
             health = lg.compute_health()
             lg.save_health(health)
@@ -118,7 +115,8 @@ def cmd_predict(args):
                   file=sys.stderr, flush=True)
             picks += predict_day(prov, day=d, odds=args.odds, markets=mkts,
                                  market_min_conf=demo_bypass,
-                                 league_caution=caution)
+                                 league_caution=caution,
+                                 show_all=show_all)
         except RuntimeError as e:
             print(f"PREDICT FAILED for {d}: {e}", file=sys.stderr)
             if getattr(args, "days", 1) == 1:
@@ -129,13 +127,156 @@ def cmd_predict(args):
         print(f"⚠ league caution on {len(cautioned)} pick(s) -- our patterns "
               f"may not suit those matches "
               f"(see 'python -m overunder leagues')", file=sys.stderr)
-    # statarea cards only exist for ~today: tag just those, skip future days
-    today_picks = [p for p in picks if p.get("date") == __import__("datetime").date.today().isoformat()]
+    today_str = __import__("datetime").date.today().isoformat()
+    today_picks = [p for p in picks if p.get("date") == today_str]
     other_picks = [p for p in picks if p not in today_picks]
     picks = _maybe_tag_statarea(today_picks, args) + other_picks
-    added = hist.record_picks(picks)
-    print(json.dumps(picks, indent=2))
-    print(f"recorded {added} new picks -> {config.HISTORY_FILE}", file=sys.stderr)
+    # show_all = diagnostic mode.  Do NOT save the GATE rows to history
+    # (only PASS rows are saved).  If user wants them saved they pick
+    # manually and call the history store.
+    if show_all:
+        recordable = [p for p in picks if p.get("verdict") == "PASS"]
+    else:
+        recordable = picks
+    added = hist.record_picks(recordable)
+    if getattr(args, "json", False):
+        print(json.dumps(picks, indent=2, default=str))
+    else:
+        print(json.dumps(picks, indent=2))
+    if show_all:
+        print(f"[audit] PASS rows recorded: {added} -> {config.HISTORY_FILE} "
+              f"(GATE rows not persisted)", file=sys.stderr)
+    else:
+        print(f"recorded {added} new picks -> {config.HISTORY_FILE}", file=sys.stderr)
+
+
+def cmd_fixture_audit(args):
+    """Full card audit: EVERY fixture × every requested market, with
+    verdict (PASS/GATE), top-missed checks, gate reasons, league_caution
+    and (optional) statarea cross-check tag.
+
+    No skips.  User manually decides what to play.
+    """
+    from .predict import predict_day
+    from .rules import CHECK_NAMES
+    prov = _provider(args.demo)
+    mkts = _markets(args.markets)
+    # fixture-audit is always diagnostic: show ALL, no league_caution skips,
+    # statarea DIVERGE tagged but not filtered.
+    args.no_statarea_filter = True
+    dates = [args.date or __import__("datetime").date.today().isoformat()]
+    caution = None
+    if not args.demo and not config.LEAGUE_AVOID_DISABLE:
+        from . import leagues as lg
+        try:
+            health = lg.compute_health()
+            caution = lg.caution_sets(health)
+        except Exception:
+            caution = None
+    rows = []
+    for d in dates:
+        try:
+            rows += predict_day(prov, day=d, odds=args.odds, markets=mkts,
+                                league_caution=caution, show_all=True)
+        except RuntimeError as e:
+            print(f"AUDIT FAILED for {d}: {e}", file=sys.stderr)
+    rows = _maybe_tag_statarea(rows, args)
+    verdict_want = (args.verdict or "ALL").upper()
+    if verdict_want not in {"ALL", "PASS", "GATE"}:
+        print(f"[fixture-audit] unknown --verdict={args.verdict!r}, using ALL",
+              file=sys.stderr)
+        verdict_want = "ALL"
+    rows = [r for r in rows
+            if verdict_want == "ALL" or r.get("verdict") == verdict_want]
+    rows = [r for r in rows if len(r.get("missed") or []) >= args.min_missed]
+
+    if getattr(args, "json", False):
+        print(json.dumps(rows, indent=2, default=str))
+        return
+
+    def _short(label, width=54):
+        # Strip the trailing " (failed)" if present, then truncate with ellipsis
+        if label.endswith(" (failed)"):
+            label = label[:-len(" (failed)")]
+        return (label[:width-3] + "...") if len(label) > width else label
+
+    # Group by fixture then market for readability
+    by_fx = {}
+    order = []
+    for r in rows:
+        k = (r.get("date", ""), r.get("league", ""),
+             r.get("home", ""), r.get("away", ""))
+        if k not in by_fx:
+            by_fx[k] = []
+            order.append(k)
+        by_fx[k].append(r)
+    print(f"== FIXTURE AUDIT (no skips)  {len(order)} fixtures × "
+          f"{len(rows)} (fixture, market) rows  --verdict={verdict_want}  "
+          f"--min-missed={args.min_missed} ==")
+    if not rows:
+        print("  (no rows matched the filters -- rerun without filters)")
+        return
+    PASS_count = sum(1 for r in rows if r.get("verdict") == "PASS")
+    GATE_count = len(rows) - PASS_count
+    print(f"   PASS={PASS_count}  GATE={GATE_count}  "
+          f"markets={','.join(mkts)}")
+    print()
+    # Sort fixtures: first the ones with ANY pass (league caution flagged),
+    # then pure gate-only groups; within by league.
+    def fx_sort(key):
+        rs = by_fx[key]
+        has_pass = any(r.get("verdict") == "PASS" for r in rs)
+        return (0 if has_pass else 1,
+                key[1], key[2])
+    order.sort(key=fx_sort)
+    for k in order:
+        date, league, home, away = k
+        rs = by_fx[k]
+        has_warn = any((r.get("league_caution")
+                        or r.get("statarea_signal") == "DIVERGE"
+                        or r.get("verdict") == "GATE") for r in rs)
+        tag = ""
+        if has_warn:
+            tags = []
+            if any(r.get("league_caution") for r in rs):
+                tags.append("league-caution")
+            if any(r.get("statarea_signal") == "DIVERGE" for r in rs):
+                tags.append("statarea DIVERGE")
+            if tags:
+                tag = "   ‼ " + " + ".join(tags)
+        print(f"⚽ {date}  {league}   {home} vs {away}{tag}")
+        for r in rs:
+            mkt = r.get("market", "?")
+            label = r.get("label", mkt)
+            v = r.get("verdict", "?")
+            conf = r.get("confidence", 0.0)
+            thr = r.get("solid_threshold", 0.0)
+            g = r.get("gate_reasons", []) or []
+            missed = r.get("missed", []) or []
+            top3 = [_short(m) for m in missed[:3]]
+            st = r.get("statarea_signal")
+            lc = r.get("league_caution")
+            prefix = "   ✅" if v == "PASS" else "   🚫"
+            line1 = (f"{prefix} [{mkt:<8} {label:<18}] {v:<4}  "
+                     f"conf={conf:.3f} (thr {thr:.3f})  "
+                     f"checks={r.get('checks_passed','?')}/{r.get('checks_total','?')}")
+            if st:
+                line1 += f"   statarea={st}"
+            print(line1)
+            if g:
+                for reason in g[:4]:
+                    print(f"      why gate: {reason}")
+                if len(g) > 4:
+                    print(f"      why gate: +{len(g)-4} more reasons")
+            if top3:
+                print("      top missed checks:")
+                for m in top3:
+                    print(f"         - {m}")
+                if len(missed) > 3:
+                    print(f"         - +{len(missed)-3} more failed checks")
+            if lc:
+                print(f"      ⚠ league: {lc}")
+        print()
 
 
 def cmd_compare(args):
@@ -270,6 +411,20 @@ def cmd_leagues(args):
     path = lg.save_health(health, window_days=args.window,
                           min_picks=args.min_picks)
     pairs, blocked = lg.caution_sets(health)
+    if getattr(args, "json", False):
+        payload = {
+            "window_days": args.window,
+            "min_picks": args.min_picks,
+            "saved_at": path,
+            "leagues": health,
+            "caution_pairs": [
+                {"league": k[0], "market": k[1], **v}
+                for k, v in pairs.items()
+            ],
+            "manually_blocked": sorted(blocked),
+        }
+        print(json.dumps(payload, indent=2, default=str))
+        return
     print(f"== LEAGUE HEALTH (last {args.window}d, min {args.min_picks} picks) ==")
     print(f"saved -> {path}")
     if not health:
@@ -278,13 +433,16 @@ def cmd_leagues(args):
     for lgk, mkts in health.items():
         n = sum(g["n"] for g in mkts.values())
         w = sum(g["w"] for g in mkts.values())
+        l = sum(g["l"] for g in mkts.values())
         profit = round(sum(g["profit"] for g in mkts.values()), 2)
-        worst = sorted(mkts.items(), key=lambda kv: kv[1]["profit"])
-        rows.append((profit, lgk, n, w, worst))
+        win_pct = round(100 * w / n, 1) if n else 0.0
+        worst = sorted(mkts.items(), key=lambda kv: (
+            kv[1]["win_pct"], kv[1]["profit"], -kv[1]["n"]))
+        rows.append((win_pct, profit, -n, lgk, n, w, l, worst))
     rows.sort()
-    for profit, lgk, n, w, worst in rows:
+    for _, profit, _, lgk, n, w, l, worst in rows:
         flag = " ⚠" if lgk in blocked else ""
-        print(f"\n  {lgk}{flag}   {n} picks {w}W-{n - w}L  {profit:+.2f}u")
+        print(f"\n  {lgk}{flag}   {n} picks {w}W-{l}L  {profit:+.2f}u")
         for mk, g in worst:
             mark = "  ⚠ CAUTION" if g["caution"] else ""
             print(f"     {mk:<9} {g['n']:>3} picks  {g['w']}W-{g['l']}L  "
@@ -293,6 +451,64 @@ def cmd_leagues(args):
         print(f"\nmanually flagged (OU_LEAGUE_BLOCK): {sorted(blocked)}")
     if not pairs and not blocked:
         print("\nno leagues on the caution list right now")
+
+
+def cmd_checks_by_league(args):
+    """Per-league failing-rule-check analysis.
+
+    For each league with settled picks, shows which rule checks have the
+    biggest win-rate delta between picks where the check passed and picks
+    where it was in the 'missed' list (i.e., the confidence engine already
+    knew it was weak for that fixture).
+
+    Key columns:
+      Rel      picks in this league where the check was relevant (market applies)
+      Miss     relevant picks where the check landed in the missed list
+      Miss%    Miss / Rel
+      W|M      win% of picks WHERE THE CHECK FAILED (want this LOW)
+      W|P      win% of picks WHERE THE CHECK PASSED (want this HIGH)
+      Δpp      W|P − W|M  (positive = the check discriminates; bigger = better)
+      Pattern Note  human-readable tag for the biggest signals.
+    """
+    from .checks_by_league import per_league_check_summary
+    s = per_league_check_summary(min_picks_per_league=args.min_picks)
+    if getattr(args, "json", False):
+        print(json.dumps(s, indent=2, default=str))
+        return
+    print("== PER-LEAGUE FAILING CHECKS ==")
+    if not s:
+        print("  (no leagues have >= {} settled picks yet -- "
+              "settle some days first or lower --min-picks)"
+              .format(args.min_picks))
+        return
+    for display, lg in s.items():
+        print()
+        print(f"[ {display} ]   {lg['total_picks']} picks  "
+              f"{lg['total_w']}W-{lg['total_l']}L  "
+              f"{lg['total_win_pct']:.1f}% league-wide")
+        hdr = (f"  {'Check':<44} {'Rel':>3} {'Miss':>5} "
+               f"{'Miss%':>6} {'W|M':>6} {'W|P':>6} {'Δpp':>6}  Pattern Note")
+        print(hdr)
+        print("-" * len(hdr))
+        for label, r in lg["checks"].items():
+            lbl = (label[:41] + "...") if len(label) > 44 else label
+            rel = r["n_picks"]
+            miss = r["missed"]
+            mrate = f"{r['miss_rate']:.0f}%"
+            wm = f"{r['win_when_missed']:.0f}%" if r["win_when_missed"] is not None else "  n/a"
+            wp = f"{r['win_when_passed']:.0f}%" if r["win_when_passed"] is not None else "  n/a"
+            delta = f"{r['delta']:+.0f}" if r["delta"] is not None else "  n/a"
+            note = ""
+            if r["delta"] is not None and r["delta"] >= 30 and miss >= 1:
+                note = "STRONG: tank when this fails"
+            elif r["delta"] is not None and r["delta"] <= -15 and miss >= 1:
+                note = "INVERSE: win more if it fails"
+            elif miss >= 1 and r["win_when_missed"] is not None and r["win_when_missed"] <= 30:
+                note = "Loser pattern when missed"
+            elif rel >= 2 and miss == 0:
+                note = "100% pass here"
+            print(f"  {lbl:<44} {rel:>3} {miss:>5} "
+                  f"{mrate:>6} {wm:>6} {wp:>6} {delta:>6}  {note}")
 
 
 def cmd_settle(args):
@@ -330,16 +546,22 @@ def cmd_stats(args):
     print("== PREDICTION STATS ==")
     for name, g in s.get("overall", {}).items():
         print("OVERALL      " + _fmt_group(name, g)[2:])
-    def _show(title, groups):
+    def _show(title, groups, sort_worst_first=False):
         print(title)
         if not groups:
             print("  (none settled yet)")
-        for name, g in sorted(groups.items()):
+            return
+        items = list(groups.items())
+        if sort_worst_first:
+            items.sort(key=lambda kv: (kv[1]["win_pct"], kv[1]["profit"], -kv[1]["n"]))
+        else:
+            items.sort(key=lambda kv: kv[0])
+        for name, g in items:
             print(_fmt_group(name, g))
     _show("BY STATAREA SIGNAL:", s.get("by_signal", {}))
     _show("BY MARKET:", s.get("by_market", {}))
     _show("BY TIER:", s.get("by_tier", {}))
-    _show("BY LEAGUE:", s.get("by_league", {}))
+    _show("BY LEAGUE (worst first):", s.get("by_league", {}), sort_worst_first=True)
     print(f"pending: {s['pending']}   settled: {s['settled_total']}")
 
 
@@ -794,7 +1016,26 @@ def main(argv=None):
     p.add_argument("--statarea", action="store_true"); p.add_argument("--card")
     p.add_argument("--markets", default="over", help="comma list: over,over15,under,under35,btts,no_btts,home,home_dw,home_sc,away_sc")
     p.add_argument("--days", type=int, default=1, help="predict N days from --date (default today)")
+    p.add_argument("--show-all", action="store_true",
+                   help="DIAGNOSTIC: emit EVERY (fixture, market) with verdict=PASS|GATE so you pick manually")
+    p.add_argument("--no-statarea-filter", action="store_true",
+                   help="with --statarea: tag with DIVERGE but don't drop home-picks that disagree")
+    p.add_argument("--json", action="store_true",
+                   help="machine-readable JSON output (works with --show-all)")
     p.set_defaults(fn=cmd_predict)
+    p = sub.add_parser("fixture-audit",
+                       help="full card audit (no skips): show per-market PASS/GATE + top missed checks so you manually pick")
+    p.add_argument("--date", default=None)
+    p.add_argument("--demo", action="store_true")
+    p.add_argument("--markets", default=",".join(config.DEFAULT_PUBLISH_MARKETS))
+    p.add_argument("--odds", type=float, default=config.DEFAULT_ODDS)
+    p.add_argument("--statarea", action="store_true"); p.add_argument("--card")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--verdict", default="ALL",
+                   help="ALL | PASS | GATE -- only show rows with this verdict (default ALL)")
+    p.add_argument("--min-missed", type=int, default=0,
+                   help="min number of failed checks before a row is shown (0 = show all)")
+    p.set_defaults(fn=cmd_fixture_audit)
     p = sub.add_parser("compare"); common(p); p.add_argument("--picks", required=True)
     p.add_argument("--card"); p.set_defaults(fn=cmd_compare)
     p = sub.add_parser("settle"); common(p); p.add_argument("--days", type=int, default=None)
@@ -806,6 +1047,7 @@ def main(argv=None):
                    help="trailing window in days (default: env OU_LEAGUE_WINDOW_DAYS=30)")
     p.add_argument("--min-picks", type=int, default=config.LEAGUE_HEALTH_MIN_PICKS,
                    help="min settled picks before a pair can be avoided (default 6)")
+    p.add_argument("--json", action="store_true", help="machine-readable JSON output")
     p.set_defaults(fn=cmd_leagues)
     p = sub.add_parser("report"); common(p)
     p.add_argument("--markets", default=",".join(config.DEFAULT_PUBLISH_MARKETS))
@@ -816,6 +1058,12 @@ def main(argv=None):
     p.set_defaults(fn=cmd_scrape_check)
     p = sub.add_parser("team-stats"); common(p); p.add_argument("team")
     p.set_defaults(fn=cmd_team_stats)
+    p = sub.add_parser("checks-by-league",
+                       help="per-league failing-check analysis: which rule checks tank us per competition")
+    p.add_argument("--min-picks", type=int, default=1,
+                   help="min settled picks per league (default: 1)")
+    p.add_argument("--json", action="store_true", help="machine-readable JSON output")
+    p.set_defaults(fn=cmd_checks_by_league)
     p = sub.add_parser("recent"); p.add_argument("--n", type=int, default=25)
     p.set_defaults(fn=cmd_recent)
     p = sub.add_parser("pending")

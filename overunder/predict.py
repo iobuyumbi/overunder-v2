@@ -82,9 +82,15 @@ REQUIRED_MARKET_CHECKS = {
 }
 
 
-def build_pick(fixture, provider, market="over", odds=DEFAULT_ODDS, before=None):
-    # `before` = ISO date; only matches strictly before it count toward form.
-    # Defaults to the fixture's own day so nothing from match day leaks in.
+def build_pick(fixture, provider, market="over", odds=DEFAULT_ODDS, before=None,
+               include_gate_audit=False):
+    """If include_gate_audit=True, the returned dict gains audit_* fields:
+      - audit_required_failed: list[str] of REQUIRED check IDs that failed
+      - audit_optional_failed: list[str] of CORE (non-required) check IDs that failed
+      - audit_over_path_failed: bool, True if market=="over" and over_path_passes returned False
+      - audit_all_checks: {check_id: bool} full run_checks dict (for custom drill-down)
+    Used by `fixture-audit` so users can see exactly why a market was gated out.
+    """
     before = before if before is not None else fixture.get("date")
     home_ms = provider.team_matches(fixture["home"], before=before)
     away_ms = provider.team_matches(fixture["away"], before=before)
@@ -95,7 +101,9 @@ def build_pick(fixture, provider, market="over", odds=DEFAULT_ODDS, before=None)
                         lam_h=lam_h, lam_a=lam_a)
     over_path_passed = (over_path_passes(home_ms, away_ms, checks)
                         if market == "over" else True)
-    required_checks_passed = all(checks[k] for k in REQUIRED_MARKET_CHECKS.get(market, ()))
+    required = list(REQUIRED_MARKET_CHECKS.get(market, ()))
+    required_set = set(required)
+    required_checks_passed = all(checks[k] for k in required)
     passed = sum(checks.values())
     probs = market_probs(home_ms, away_ms)
     p = probs[market]
@@ -106,11 +114,8 @@ def build_pick(fixture, provider, market="over", odds=DEFAULT_ODDS, before=None)
 
     total = len(checks)
     check_ratio = round(passed / total, 3) if total else 0.0
-    # Confidence = blended score: Poisson probability p (70% weight) scaled by
-    # rule-check pass ratio (30% weight), clamped so no pick claims perfection.
     conf = min(0.98, p * (0.70 + 0.30 * check_ratio)) if total else 0.0
     conf = round(conf, 3)
-    # Resolve odds: scalar applies to all markets, dict is per-market lookup.
     if isinstance(odds, dict):
         odds_v = float(odds.get(market, DEFAULT_ODDS))
     else:
@@ -129,7 +134,7 @@ def build_pick(fixture, provider, market="over", odds=DEFAULT_ODDS, before=None)
                       "under35": 3.5, "btts": None, "no_btts": None,
                       "home": None, "home_sc": None, "away_sc": None,
                       "home_dw": None}
-    return {
+    out = {
         "date": fixture["date"], "league": fixture["league"],
         "home": fixture["home"], "away": fixture["away"],
         "market": market, "label": MARKET_LABEL[market],
@@ -149,11 +154,22 @@ def build_pick(fixture, provider, market="over", odds=DEFAULT_ODDS, before=None)
         "home_concede_all": gpg(home_ms, None, "ga"),
         "away_concede_all": gpg(away_ms, None, "ga"),
     }
+    if include_gate_audit:
+        req_fail = [cid for cid in required if not checks.get(cid, False)]
+        opt_fail = [cid for cid in core
+                    if cid not in required_set and cid != "O_PATH"
+                    and not checks.get(cid, False)]
+        out["audit_required_failed"] = req_fail
+        out["audit_optional_failed"] = opt_fail
+        out["audit_over_path_failed"] = (market == "over"
+                                         and not over_path_passed)
+        out["audit_all_checks"] = dict(checks)
+    return out
 
 
 def predict_day(provider, day=None, markets=("over",), odds=DEFAULT_ODDS,
                 min_conf=O25_MIN_CONFIDENCE, market_min_conf=None,
-                league_caution=None):
+                league_caution=None, show_all=False):
     """market_min_conf: per-market gates; defaults to config.MARKET_MIN_CONF.
     Pass an empty dict to use the flat min_conf only (backtests, demos).
 
@@ -163,18 +179,23 @@ def predict_day(provider, day=None, markets=("over",), odds=DEFAULT_ODDS,
     not pass this (the caution list is computed from results that did not
     exist at the time -> lookahead bias).
 
+    show_all: if True, return EVERY (fixture, market) combination with a
+    `verdict` field explaining PASS vs GATE, and `gate_reasons` listing the
+    exact block cause.  No confidence gate, no international skip.  This
+    lets the user manually decide which picks to take from the full card.
+
     ON-DISK RERUN CACHE: if the same (day, fixtures, markets, odds) is
     requested within PREDICT_CACHE_TTL_HOURS (default: fixture HTML TTL), the
     second+ run returns instantly without re-querying team histories or the
-    rule engine.  Disable entirely with OU_CACHE_DISABLE=1."""
+    rule engine.  Disable entirely with OU_CACHE_DISABLE=1.  show_all bypasses
+    the cache (its purpose is diagnostic inspection, not hot-reruns)."""
     mmc = MARKET_MIN_CONF if market_min_conf is None else market_min_conf
-    # -- cache lookup (deterministic signature of this predict_day invocation)
     day_actual = day or _time.strftime("%Y-%m-%d")
     caution_sig = ()
     if league_caution:
         pair_stats, blocked = league_caution
         caution_sig = (tuple(sorted(pair_stats)), tuple(sorted(blocked)))
-    if not CACHE_DISABLE:
+    if not show_all and not CACHE_DISABLE:
         try:
             fixtures = provider.fixtures(day)
         except Exception:
@@ -215,8 +236,6 @@ def predict_day(provider, day=None, markets=("over",), odds=DEFAULT_ODDS,
     else:
         fixtures = provider.fixtures(day)
 
-    # dedupe fixtures: some day pages list the same match twice (two
-    # competition rows), which would otherwise emit identical picks twice
     seen_fx, uniq_fx = set(), []
     for fx in fixtures:
         k = (normalize(fx["home"]), normalize(fx["away"]), fx.get("league", ""))
@@ -230,100 +249,115 @@ def predict_day(provider, day=None, markets=("over",), odds=DEFAULT_ODDS,
         league = fx.get("league", "")
         is_intl = is_international_tournament(league)
         for mkt in markets:
-            # INTERNATIONAL TOURNAMENT POLICY (2026-10-06):
-            #   User ruled out hard-skip: "dont skip picks just caution this league
-            #   has poor roi".  So all markets go through the gate.  But ANY pick
-            #   classified as an international tournament fixture gets a
-            #   league_caution warning auto-tagged (applied below BEFORE manual
-            #   LEAGUE_BLOCK/computed pair_stats, so a more specific warning
-            #   from league health data will override it).
-            #
-            #   Exception: if the user sets env OU_INTERNATIONAL_SKIP to a
-            #   non-empty comma-list (or __ALL__), those markets ARE hard-skipped.
-            #   Default = empty frozenset → caution only, never skip.
-            if is_intl and mkt in INTERNATIONAL_SKIP_MARKETS:
+            if not show_all and is_intl and mkt in INTERNATIONAL_SKIP_MARKETS:
                 continue
             try:
-                p = build_pick(fx, provider, market=mkt, odds=odds)
+                p = build_pick(fx, provider, market=mkt, odds=odds,
+                               include_gate_audit=show_all)
             except Exception:
-                continue
+                if show_all:
+                    p = {
+                        "date": fx.get("date", day_actual),
+                        "league": league, "home": fx.get("home"),
+                        "away": fx.get("away"), "market": mkt,
+                        "label": MARKET_LABEL.get(mkt, mkt),
+                        "confidence": 0.0, "model_p": 0.0,
+                        "checks_passed": 0, "checks_total": 0,
+                        "check_ratio": 0.0, "over_path_passed": False,
+                        "required_checks_passed": False, "missed": [],
+                        "ev": 0.0, "edge_pct": 0.0, "stake_pct": 0.0,
+                        "odds": (float(odds.get(mkt, DEFAULT_ODDS))
+                                 if isinstance(odds, dict) else float(odds)),
+                        "tier": "build_pick error", "xg": [0.0, 0.0],
+                        "home_attack": 0, "home_concede": 0,
+                        "away_attack": 0, "away_concede": 0,
+                        "home_gpg_all": 0, "away_gpg_all": 0,
+                        "home_concede_all": 0, "away_concede_all": 0,
+                        "audit_build_error": True,
+                    }
+                else:
+                    continue
             thr = mmc.get(mkt) or min_conf
-            # Solid filter is ONLY active in production mode, meaning the
-            # caller did NOT pass an explicit market_min_conf override
-            # (empty dict = demo/backtest flat-gate; custom dict = per-market
-            # experiment where caller's thr is already the intended floor).
             if market_min_conf is None:
                 solid_thr = MARKET_SOLID.get(mkt, thr)
             else:
                 solid_thr = thr
-            if (p.get("required_checks_passed", False) and
-                    (mkt != "over" or p.get("over_path_passed", False))) and \
-                    p["confidence"] >= solid_thr:
-                # Build league_caution with priority:
-                #   1. Manual OU_LEAGUE_BLOCK (entire league) or computed
-                #      60-day health pair_stats with detailed reasons.
-                #      This produces the explicit "doesn't go with our picks"
-                #      verbiage user requested.
-                #   2. International tournament auto-warning.
-                # If BOTH (1) and (2) apply, we combine them -- the user said
-                #   > "any other league with poor roi caution us"
-                # so they want to see every signal.
-                if league_caution:
-                    from .leagues import league_key
-                    pair_stats, blocked = league_caution
-                    lgk = league_key(fx.get("league"))
-                    if lgk in blocked:
+            gate_reasons = []
+            if not p.get("required_checks_passed", False):
+                rf = p.get("audit_required_failed")
+                if rf:
+                    gate_reasons.append("required checks failed: "
+                                        + ", ".join(rf))
+                else:
+                    gate_reasons.append("required checks failed")
+            if mkt == "over" and not p.get("over_path_passed", True):
+                gate_reasons.append("over_path check failed")
+            if p["confidence"] < solid_thr:
+                gate_reasons.append(
+                    "conf {:.3f} < gate {:.3f} ({})".format(
+                        p["confidence"], solid_thr,
+                        "market default solid thr"
+                        if market_min_conf is None else "caller thr"))
+            if is_intl and mkt in INTERNATIONAL_SKIP_MARKETS:
+                gate_reasons.append("OU_INTERNATIONAL_SKIP (hard-skip env)")
+            if p.get("audit_build_error"):
+                gate_reasons.append("build_pick exception (team data missing?)")
+            passed = not gate_reasons
+            if show_all:
+                p["verdict"] = "PASS" if passed else "GATE"
+                p["gate_reasons"] = gate_reasons
+                p["solid_threshold"] = solid_thr
+                p["conf_gate_pass"] = p["confidence"] >= solid_thr
+            if not show_all and not passed:
+                continue
+            if league_caution:
+                from .leagues import league_key
+                pair_stats2, blocked2 = league_caution
+                lgk = league_key(fx.get("league"))
+                if lgk in blocked2:
+                    tag = (
+                        "manually flagged league -- our patterns don't "
+                        "suit this competition; reduce stake or skip")
+                    if is_intl:
                         tag = (
-                            "manually flagged league -- our patterns don't "
-                            "suit this competition; reduce stake or skip")
-                        if is_intl:
-                            tag = (
-                                "international tournament + manually flagged "
-                                "league -- avoid this match entirely unless "
-                                "you have a strong contrary opinion")
-                        p["league_caution"] = tag
-                    elif (lgk, mkt) in pair_stats:
-                        g = pair_stats[(lgk, mkt)]
-                        # Detailed caution_reasons from compute_health list
-                        # EXACTLY why: unprofitable / deviates from our picks
-                        # / below absolute floor.
-                        reasons = g.get("caution_reasons") or []
-                        if reasons:
-                            health_tag = (
-                                "CAUTION: {} in this league (60-day: "
-                                "{}W-{}L {:.1f}% win% {:+.1f}u) -- {}. "
-                                "Reduce stake or skip if unsure."
-                                .format(mkt, g["w"], g["l"], g["win_pct"],
-                                        g["profit"], "; ".join(reasons)))
-                        else:
-                            health_tag = (
-                                "{} in this league: {}W-{}L {:+.1f}u lately -- "
-                                "our patterns may not suit this match"
-                                .format(mkt, g["w"], g["l"], g["profit"]))
-                        if is_intl:
-                            p["league_caution"] = (
-                                "international tournament + league-health "
-                                "warning for {}: {}. Poor fit overall; "
-                                "reduce stake or skip."
-                                .format(mkt, health_tag))
-                        else:
-                            p["league_caution"] = health_tag
-                    elif is_intl:
-                        # No specific pair caution (or not enough sample yet
-                        # for 60-day), but it IS an international tournament.
+                            "international tournament + manually flagged "
+                            "league -- avoid this match entirely unless "
+                            "you have a strong contrary opinion")
+                    p["league_caution"] = tag
+                elif (lgk, mkt) in pair_stats2:
+                    g = pair_stats2[(lgk, mkt)]
+                    reasons = g.get("caution_reasons") or []
+                    if reasons:
+                        health_tag = (
+                            "CAUTION: {} in this league (60-day: "
+                            "{}W-{}L {:.1f}% win% {:+.1f}u) -- {}. "
+                            "Reduce stake or skip if unsure."
+                            .format(mkt, g["w"], g["l"], g["win_pct"],
+                                    g["profit"], "; ".join(reasons)))
+                    else:
+                        health_tag = (
+                            "{} in this league: {}W-{}L {:+.1f}u lately -- "
+                            "our patterns may not suit this match"
+                            .format(mkt, g["w"], g["l"], g["profit"]))
+                    if is_intl:
                         p["league_caution"] = (
-                            "international tournament -- poor ROI track "
-                            "record on this competition; reduce stake or "
-                            "skip if unsure")
+                            "international tournament + league-health "
+                            "warning for {}: {}. Poor fit overall; "
+                            "reduce stake or skip."
+                            .format(mkt, health_tag))
+                    else:
+                        p["league_caution"] = health_tag
                 elif is_intl:
-                    # league_caution disabled entirely (LEAGUE_AVOID_DISABLE=1
-                    # or backtest/demo) -- still tag internationals.
                     p["league_caution"] = (
                         "international tournament -- poor ROI track "
                         "record on this competition; reduce stake or "
                         "skip if unsure")
-                picks.append(p)
-    # number within each market, ordered by confidence
+            elif is_intl:
+                p["league_caution"] = (
+                    "international tournament -- poor ROI track "
+                    "record on this competition; reduce stake or "
+                    "skip if unsure")
+            picks.append(p)
     for mkt in markets:
         group = sorted([p for p in picks if p["market"] == mkt],
                        key=lambda p: -p["confidence"])
@@ -331,8 +365,7 @@ def predict_day(provider, day=None, markets=("over",), odds=DEFAULT_ODDS,
             p["num"] = i
     picks.sort(key=lambda p: (list(markets).index(p["market"]), -p["confidence"]))
 
-    # -- cache persist (same deterministic signature)
-    if not CACHE_DISABLE:
+    if not show_all and not CACHE_DISABLE:
         try:
             os.makedirs(CACHE_DIR, exist_ok=True)
             try:
@@ -342,7 +375,6 @@ def predict_day(provider, day=None, markets=("over",), odds=DEFAULT_ODDS,
                     cache_bucket = {}
             except (json.JSONDecodeError, OSError, ValueError):
                 cache_bucket = {}
-            # prune expired records opportunistically
             now = _time.time()
             pruned = {k: v for k, v in cache_bucket.items()
                       if 0 <= now - v.get("t", now + 1) <= ttl}
@@ -351,6 +383,7 @@ def predict_day(provider, day=None, markets=("over",), odds=DEFAULT_ODDS,
                 json.dump(pruned, f)
         except OSError:
             pass
+    return picks
 
 import argparse
 import sys

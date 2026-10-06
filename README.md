@@ -38,6 +38,8 @@ Or just:  run_local.bat   (Windows, does all of the above; `run_local.bat demo` 
 
     python -m overunder predict --days 4                 (today + 3 days ahead, all recorded)
     python -m overunder report --days 4
+    python -m overunder fixture-audit --markets over,over15,btts
+        (show every fixture and PASS/GATE reasons, including international teams)
     python -m overunder backtest --days 60 --markets over,btts,home
         (replays the past N days: picks as-of each morning, settled vs real
          results, no lookahead; never writes to prediction history)
@@ -47,6 +49,8 @@ Or just:  run_local.bat   (Windows, does all of the above; `run_local.bat demo` 
     demo            offline end-to-end self-test
     predict         build picks for a day/range of days (--date, --days, --markets,
                     --odds, --statarea, --card, --demo)
+    fixture-audit  show every fixture/market and the checks or confidence gate
+                    that passed or excluded it (--verdict, --min-missed, --json)
     report          VIP-style txt report (--days, --markets, --telegram)
     settle          settle pending picks (no args = scan all pending dates)
     stats           readable ROI tables (--json for machines)
