@@ -41,6 +41,11 @@ _load_dotenv()
 
 # --- model thresholds -------------------------------------------------------
 O25_MIN_CONFIDENCE = float(os.getenv("O25_MIN_CONFIDENCE", "0.55"))
+# Lower confidence bar for Over 2.5 when a clear scoring-vs-leakage path passes.
+# The attacking team's own defence and the opponent's attack are optional on
+# this path; one side can account for all three goals.
+OVER_DIRECTIONAL_MIN_CONFIDENCE = float(
+    os.getenv("OVER_DIRECTIONAL_MIN_CONFIDENCE", "0.68"))
 
 
 def _parse_market_min_conf():
@@ -240,7 +245,7 @@ MARKET_SOLID = _parse_market_solid()
 # Bump this string whenever rules.py logic, check sets, gates, premium tiers,
 # or the confidence formula change. It is mixed into the predict_day cache
 # signature so stale picks computed under older rules are never served.
-RULES_VERSION = os.getenv("OU_RULES_VERSION", "2026-10-06.4-venue-fallback-for-sparse-national-team-data")
+RULES_VERSION = os.getenv("OU_RULES_VERSION", "2026-10-06.5-directional-over-path")
 
 # -----------------------------------------------------------------------------
 # Supported + default-publish markets.

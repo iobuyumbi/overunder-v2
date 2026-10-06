@@ -11,6 +11,7 @@ One engine, one report, one settlement path."""
 
 from .config import (DEFAULT_ODDS, KELLY_FRACTION, MARKET_MIN_CONF, MAX_STAKE_PCT,
                      O25_MIN_CONFIDENCE, PREMIUM_TIER, MARKET_PREMIUM, MARKET_SOLID,
+                     OVER_DIRECTIONAL_MIN_CONFIDENCE,
                      RULES_VERSION, CACHE_DIR, FREQ_CFG,
                      LEAGUE_AVG_HOME_GOALS, LEAGUE_AVG_AWAY_GOALS,
                      PREDICT_CACHE_TTL_HOURS, CACHE_DISABLE,
@@ -95,12 +96,15 @@ def build_pick(fixture, provider, market="over", odds=DEFAULT_ODDS, before=None,
     home_ms = provider.team_matches(fixture["home"], before=before)
     away_ms = provider.team_matches(fixture["away"], before=before)
     lam_h, lam_a = lambdas(home_ms, away_ms)
-    from .rules import over_path_passes, run_checks
+    from .rules import (over_attack_leak_path_passes, over_path_passes,
+                        run_checks)
     checks = run_checks(home_ms, away_ms, market=market,
                         home_name=fixture["home"], away_name=fixture["away"],
                         lam_h=lam_h, lam_a=lam_a)
     over_path_passed = (over_path_passes(home_ms, away_ms, checks)
                         if market == "over" else True)
+    over_directional_path = (market == "over"
+                             and over_attack_leak_path_passes(checks))
     required = list(REQUIRED_MARKET_CHECKS.get(market, ()))
     required_set = set(required)
     required_checks_passed = all(checks[k] for k in required)
@@ -114,7 +118,11 @@ def build_pick(fixture, provider, market="over", odds=DEFAULT_ODDS, before=None,
 
     total = len(checks)
     check_ratio = round(passed / total, 3) if total else 0.0
-    conf = min(0.98, p * (0.70 + 0.30 * check_ratio)) if total else 0.0
+    # When a strong scoring profile meets the other side's leakage profile,
+    # don't dilute the Over estimate with the scorer's defensive weakness or
+    # the opponent's attacking form: either can be irrelevant to 3 total goals.
+    relevant_ratio = 1.0 if over_directional_path else check_ratio
+    conf = min(0.98, p * (0.70 + 0.30 * relevant_ratio)) if total else 0.0
     conf = round(conf, 3)
     if isinstance(odds, dict):
         odds_v = float(odds.get(market, DEFAULT_ODDS))
@@ -144,6 +152,10 @@ def build_pick(fixture, provider, market="over", odds=DEFAULT_ODDS, before=None,
         "checks_passed": passed, "checks_total": total,
         "check_ratio": check_ratio,
         "over_path_passed": over_path_passed,
+        "over_directional_path_passed": over_directional_path,
+        "confidence_basis": ("directional attack vs opposing leakage"
+                             if over_directional_path
+                             else "market probability blended with check ratio"),
         "required_checks_passed": required_checks_passed,
         "missed": missed, "ev": ev, "edge_pct": round(ev * 100, 1),
         "stake_pct": stake, "odds": odds_v, "tier": tier,
@@ -213,7 +225,7 @@ def predict_day(provider, day=None, markets=("over",), odds=DEFAULT_ODDS,
                                 for k, v in FREQ_CFG.items()))
         tunables_sig = (PREMIUM_TIER, KELLY_FRACTION, MAX_STAKE_PCT,
                         LEAGUE_AVG_HOME_GOALS, LEAGUE_AVG_AWAY_GOALS,
-                        DEFAULT_ODDS)
+                        DEFAULT_ODDS, OVER_DIRECTIONAL_MIN_CONFIDENCE)
         cache_key = (day_actual, fx_sig, mkts_sig, odds_sig, min_conf, mmc_sig,
                      prem_sig, solid_sig, freq_sig, tunables_sig, RULES_VERSION, caution_sig,
                      type(provider).__name__)
@@ -264,6 +276,7 @@ def predict_day(provider, day=None, markets=("over",), odds=DEFAULT_ODDS,
                         "confidence": 0.0, "model_p": 0.0,
                         "checks_passed": 0, "checks_total": 0,
                         "check_ratio": 0.0, "over_path_passed": False,
+                        "over_directional_path_passed": False,
                         "required_checks_passed": False, "missed": [],
                         "ev": 0.0, "edge_pct": 0.0, "stake_pct": 0.0,
                         "odds": (float(odds.get(mkt, DEFAULT_ODDS))
@@ -279,7 +292,9 @@ def predict_day(provider, day=None, markets=("over",), odds=DEFAULT_ODDS,
                     continue
             thr = mmc.get(mkt) or min_conf
             if market_min_conf is None:
-                solid_thr = MARKET_SOLID.get(mkt, thr)
+                solid_thr = (OVER_DIRECTIONAL_MIN_CONFIDENCE
+                             if p.get("over_directional_path_passed")
+                             else MARKET_SOLID.get(mkt, thr))
             else:
                 solid_thr = thr
             gate_reasons = []
@@ -424,5 +439,3 @@ if __name__ == "__main__":
     )
 
     json.dump(picks, sys.stdout, indent=2)
-
-

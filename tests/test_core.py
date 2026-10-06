@@ -164,6 +164,52 @@ class TestMarkets(unittest.TestCase):
         self.assertEqual(n, 1)
 
 
+class TestDirectionalOverPath(unittest.TestCase):
+    def test_opponent_leakage_path_does_not_require_optional_signals(self):
+        from overunder.rules import over_attack_leak_path_passes
+        checks = {
+            "H6": True, "H7": True,   # home side scores
+            "A9": True, "A12": True,  # away side concedes
+            "H8": False, "H12": False,  # home side need not concede
+            "A3": False, "A8": False,  # away side need not score
+        }
+        self.assertTrue(over_attack_leak_path_passes(checks))
+
+    def test_directional_over_confidence_ignores_unrelated_checks(self):
+        class StaticProvider:
+            def team_matches(self, team, before=None):
+                if team == "Home":
+                    return [M("H", 3, 0) for _ in range(6)]
+                return [M("A", 0, 3) for _ in range(6)]
+
+        fixture = {"date": "2026-09-10", "league": "Example",
+                   "home": "Home", "away": "Away"}
+        pick = build_pick(fixture, StaticProvider(), market="over",
+                          include_gate_audit=True)
+        self.assertTrue(pick["over_directional_path_passed"])
+        self.assertEqual(pick["confidence"], pick["model_p"])
+
+    def test_directional_path_uses_its_own_over_gate(self):
+        from unittest.mock import patch
+
+        class StaticProvider:
+            def fixtures(self, day=None):
+                return [{"date": "2026-09-10", "league": "Example",
+                         "home": "Home", "away": "Away"}]
+
+            def team_matches(self, team, before=None):
+                if team == "Home":
+                    return [M("H", 3, 0) for _ in range(6)]
+                return [M("A", 0, 3) for _ in range(6)]
+
+        with patch("overunder.predict.CACHE_DISABLE", True):
+            picks = predict_day(StaticProvider(), day="2026-09-10",
+                                markets=("over",))
+        self.assertEqual(len(picks), 1)
+        self.assertTrue(picks[0]["over_directional_path_passed"])
+        self.assertGreaterEqual(picks[0]["confidence"], 0.68)
+
+
 class TestStatareaHeaderLeak(unittest.TestCase):
     """Regression: column headers '1'/'2' must not leak into the 11 stats.
     Inter vs Udinese real card row: 71 20 9 51 32 17 90 68 45 49 51 -> over25=68."""

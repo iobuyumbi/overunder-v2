@@ -514,6 +514,20 @@ def _no_btts_checks(home_ms, away_ms, lam_h, lam_a):
     return checks
 
 
+def over_attack_leak_path_passes(checks):
+    """A scoring profile paired with the opposing team's leakage profile.
+
+    The non-scoring team's own attack and the scoring team's own defence are
+    deliberately not required for this route: one side can produce all three
+    goals while the opponent's defensive record supplies the matchup evidence.
+    """
+    home_attack_away_leak = (
+        checks["H6"] and checks["H7"] and checks["A9"] and checks["A12"])
+    away_attack_home_leak = (
+        checks["A3"] and checks["A8"] and checks["H8"] and checks["H12"])
+    return bool(home_attack_away_leak or away_attack_home_leak)
+
+
 def over_path_passes(home_ms, away_ms, checks):
     """Require Over 2.5 to have a coherent venue+overall evidence path.
 
@@ -526,10 +540,7 @@ def over_path_passes(home_ms, away_ms, checks):
     h6H = _venue_or(_last(home_ms, 6, "H"), h6, 3)
     a6A = _venue_or(_last(away_ms, 6, "A"), a6, 3)
     btts = lambda m: m["gf"] > 0 and m["ga"] > 0
-    home_attack_away_leak = (
-        checks["H6"] and checks["H7"] and checks["A9"] and checks["A12"])
-    away_attack_home_leak = (
-        checks["A3"] and checks["A8"] and checks["H8"] and checks["H12"])
+    attack_leak_path = over_attack_leak_path_passes(checks)
     home_open = (
         _freq_cat("btts_game", h6H, btts) and
         _freq_cat("btts_game", h6, btts))
@@ -541,7 +552,7 @@ def over_path_passes(home_ms, away_ms, checks):
     home_evidence = ((checks["H6"] and checks["H7"]) or
                      (checks["H8"] and checks["H12"]))
     return bool(
-        home_attack_away_leak or away_attack_home_leak or
+        attack_leak_path or
         (home_open and away_evidence) or
         (away_open and home_evidence))
 

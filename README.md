@@ -72,6 +72,10 @@ Or just:  run_local.bat   (Windows, does all of the above; `run_local.bat demo` 
 - Backtests are honest (point-in-time `before` filtering, enforced in code
   and covered by a regression test) but assume flat odds -- stress with
   --odds 1.9.
+- Over 2.5 can qualify on a directional path: one team's scoring form meets
+  the opponent's conceding form; the scorer's own conceding and opponent's
+  scoring checks are optional on that path. Its confidence floor defaults to
+  0.68 (`OVER_DIRECTIONAL_MIN_CONFIDENCE`).
 - Postponed matches may show as MISSING in verify; that is flagged, never
   silently wrong.
 - Never delete prediction_history.json mid-run; if a clean slate is needed,
