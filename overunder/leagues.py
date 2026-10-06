@@ -22,7 +22,9 @@ import os
 import time
 
 from .config import (DATA_DIR, LEAGUE_HEALTH_WINDOW_DAYS,
-                     LEAGUE_HEALTH_MIN_PICKS, LEAGUE_BLOCK, LEAGUE_ALLOW)
+                     LEAGUE_HEALTH_MIN_PICKS, LEAGUE_HEALTH_DEV_PCT,
+                     LEAGUE_HEALTH_FLOOR_PCT, MARKET_BASELINE_WIN_PCT,
+                     LEAGUE_BLOCK, LEAGUE_ALLOW)
 from . import history as hist
 
 
@@ -36,10 +38,19 @@ def health_path():
 
 
 def compute_health(window_days=None, min_picks=None, today=None):
-    """{league_key: {market: {n, w, l, win_pct, profit, caution}}} over the
-    trailing window. A pair is flagged caution when it has >= min_picks settled
-    picks AND is unprofitable at the recorded odds. Voids/pending don't count.
-    Leagues in OU_LEAGUE_ALLOW are never flagged."""
+    """{league_key: {market: {n, w, l, win_pct, baseline, dev_pct, profit,
+    caution, caution_reasons}}} over the trailing window.
+
+    Caution gate (ANY of these triggers, provided n >= min_picks and league
+    is NOT in OU_LEAGUE_ALLOW):
+      1. profit < 0                                   -- money loser
+      2. win_pct <= baseline - LEAGUE_HEALTH_DEV_PCT  -- "doesn't go with us"
+      3. win_pct <= LEAGUE_HEALTH_FLOOR_PCT           -- absolute loser floor
+
+    Reasons are recorded so predict/report can say EXACTLY why the pick is
+    cautioned (user workflow: "calculate loses deviating from our picks and
+    say they dont go with us well").
+    """
     window_days = LEAGUE_HEALTH_WINDOW_DAYS if window_days is None else window_days
     min_picks = LEAGUE_HEALTH_MIN_PICKS if min_picks is None else min_picks
     today = today or datetime.date.today().isoformat()
@@ -62,10 +73,36 @@ def compute_health(window_days=None, min_picks=None, today=None):
         g["profit"] = round(g["profit"] + (rec.get("profit") or 0.0), 2)
     allow = {league_key(x) for x in LEAGUE_ALLOW}
     for lg, mkts in health.items():
-        for g in mkts.values():
-            g["win_pct"] = round(100 * g["w"] / g["n"], 1) if g["n"] else 0.0
-            g["caution"] = (g["n"] >= min_picks and g["profit"] < 0
-                            and lg not in allow)
+        for mkt, g in mkts.items():
+            n = g["n"]
+            g["win_pct"] = round(100 * g["w"] / n, 1) if n else 0.0
+            baseline = MARKET_BASELINE_WIN_PCT.get(mkt)
+            g["baseline"] = baseline
+            g["dev_pct"] = round(g["win_pct"] - baseline, 1) if baseline else None
+            reasons = []
+            triggered = False
+            if n >= min_picks and lg not in allow:
+                if g["profit"] < 0:
+                    reasons.append("unprofitable (profit {:+.2f}u on {} picks)"
+                                   .format(g["profit"], n))
+                    triggered = True
+                if baseline is not None:
+                    if g["win_pct"] <= baseline - LEAGUE_HEALTH_DEV_PCT:
+                        reasons.append(
+                            "win-rate deviates {:.1f}pp below our {:>5.1f}% "
+                            "target for {} (actual {:.1f}%) -- doesn't go "
+                            "with our picks well"
+                            .format(baseline - g["win_pct"], baseline, mkt,
+                                    g["win_pct"]))
+                        triggered = True
+                if g["win_pct"] <= LEAGUE_HEALTH_FLOOR_PCT:
+                    reasons.append(
+                        "win-rate {:.1f}% is below the {:.0f}% absolute "
+                        "caution floor"
+                        .format(g["win_pct"], LEAGUE_HEALTH_FLOOR_PCT))
+                    triggered = True
+            g["caution_reasons"] = reasons
+            g["caution"] = triggered
     return health
 
 

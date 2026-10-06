@@ -28,4 +28,23 @@ live_bt_*.txt
 
 # cache files accidentally written into the repo by an old unexpanded
 # ~/.cache path -- keep them out of version control
-/~/
+~/
+
+# temporary diagnostic and output files
+_analyze_picks.py
+_diag_db.py
+_diag_debug.py
+_diag_eng1.py
+_diag_eng2.py
+_diag_eng3.py
+_diag_rawpage.py
+_diag_real.py
+_diag_teamhist.py
+_diag_teams.py
+_final_answer.py
+_fx_diag.py
+_today_clean.json
+_today_final.json
+_today_picks.json
+_today_picks2.json
+overunder/sample_data/report.txt

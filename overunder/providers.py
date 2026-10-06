@@ -275,7 +275,7 @@ class SoccerbaseProvider:
         cached = use_cache and os.path.exists(path) \
                  and time.time() - os.path.getmtime(path) < ttl_hours * 3600
         if not cached:
-            print(f"[soccerbase] fetching {url}", file=_sys.stderr, flush=True)
+            print(f"[soccerbase] fetching {url} to {path}", file=_sys.stderr, flush=True)
         if cached:
             with open(path, encoding="utf-8", errors="replace") as f:
                 return f.read()
@@ -290,7 +290,7 @@ class SoccerbaseProvider:
                     sep = "&" if "?" in url else "?"
                     req_url = f"{url}{sep}_cb={int(time.time())}"
                 r = self._session.get(req_url, timeout=HTTP_TIMEOUT_SEC)
-                print(f"[soccerbase]   -> HTTP {r.status_code}, {len(r.text)} bytes",
+                print(f"[soccerbase]   -> HTTP {r.status_code}, {len(r.text)} bytes (cached to {path})",
                       file=_sys.stderr, flush=True)
                 if r.ok and len(r.text) > 1000:
                     with open(path, "w", encoding="utf-8") as f:

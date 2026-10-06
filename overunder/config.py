@@ -240,7 +240,7 @@ MARKET_SOLID = _parse_market_solid()
 # Bump this string whenever rules.py logic, check sets, gates, premium tiers,
 # or the confidence formula change. It is mixed into the predict_day cache
 # signature so stale picks computed under older rules are never served.
-RULES_VERSION = os.getenv("OU_RULES_VERSION", "2026-10-03.11-statarea-agreement-report")
+RULES_VERSION = os.getenv("OU_RULES_VERSION", "2026-10-06.4-venue-fallback-for-sparse-national-team-data")
 
 # -----------------------------------------------------------------------------
 # Supported + default-publish markets.
@@ -269,8 +269,111 @@ RULES_VERSION = os.getenv("OU_RULES_VERSION", "2026-10-03.11-statarea-agreement-
 ALL_MARKETS = ("over", "over15", "under", "under35",
                "btts", "no_btts",
                "home", "home_dw", "home_sc", "away_sc")
-DEFAULT_PUBLISH_MARKETS = ("over", "over15", "under35", "btts",
+DEFAULT_PUBLISH_MARKETS = ("over", "over15", "btts",
                            "home", "home_dw", "home_sc", "away_sc")
+
+# --- international tournament caution (2026-10: national-team / UEFA club
+# tournaments showed materially worse hit-rates on total-goals markets) ---
+#
+# Settled performance split (2026-10):
+#   International (Nations League + Europa League, 77 picks):
+#       btts  2/7  = 28.6%   (DISASTER)
+#       over  2/5  = 40.0%   (LOSER)
+#       vs domestic equivalents at 61-72%
+#
+#   Under35 was 66.7% domestic (33 picks) vs under 42.9% -- both cut from
+#   defaults per user request ("Un35 and Un25 not working, caution needed").
+#
+# Any league name that matches a keyword below is classified as an
+# "international tournament".  On those fixtures, markets in
+# INTERNATIONAL_SKIP_MARKETS are SKIPPED ENTIRELY (no pick emitted).
+# All other markets on such fixtures get a league_caution tag auto-added
+# (even if the manual LEAGUE_BLOCK is empty and health data is not yet
+# mature for that league) so the user is warned before staking.
+INTERNATIONAL_TOURNAMENT_KEYWORDS = (
+    # UEFA Nations League (national teams) -- NOT "National League" (ENG 5th tier)
+    # Test: "nations league" in name AND "national league" not in name
+    ("CASE:Nations League", lambda name:
+        "nations league" in name.casefold()
+        and "national league" not in name.casefold()),
+    # Any provider that prefixes internationals with "INTERNATIONAL - "
+    ("PREFIX:INTERNATIONAL", lambda name: name.casefold().startswith("international")),
+    # UEFA club continental competitions (Europa League overall: 6 picks 33.3% W)
+    "Europa League",
+    "Europa Conference",
+    "Champions League",
+    "Conference League",
+    # FIFA / CAF / CONMEBOL / CONCACAF / AFC global continental tournaments
+    "World Cup",
+    "Copa America",
+    "African Cup",
+    "AFCON",
+    "Gold Cup",
+    "Asian Cup",
+    "Euro Qualifier",
+    "World Cup Qualifier",
+    "Friendly",
+    "Qualifier",
+)
+
+
+def _parse_international_keywords():
+    """Allow user to override INTERNATIONAL_TOURNAMENT_KEYWORDS via env.
+
+    OU_INTERNATIONAL_KEYWORDS=keyword1,keyword2,...
+    Blank entry falls back to the hardcoded list above.
+    Use OU_INTERNATIONAL_KEYWORDS=__NONE__ to disable the whole system.
+    """
+    raw = os.getenv("OU_INTERNATIONAL_KEYWORDS", "").strip()
+    if raw == "__NONE__":
+        return None
+    if not raw:
+        return INTERNATIONAL_TOURNAMENT_KEYWORDS
+    return tuple(k.strip() for k in raw.split(",") if k.strip())
+
+
+def is_international_tournament(league_name):
+    """Return True if `league_name` matches any INTERNATIONAL_TOURNAMENT_KEYWORDS
+    entry.  Callable (lambda) entries are invoked with the casefolded name;
+    string entries are substring-matched (case-insensitive) against the raw name.
+    """
+    if not league_name:
+        return False
+    kws = _parse_international_keywords()
+    if kws is None:
+        return False
+    cf = league_name.casefold()
+    for entry in kws:
+        if callable(entry):
+            if entry(league_name):
+                return True
+        elif isinstance(entry, tuple) and len(entry) == 2 and callable(entry[1]):
+            if entry[1](league_name):
+                return True
+        elif isinstance(entry, str):
+            if entry.casefold() in cf:
+                return True
+    return False
+
+
+# On fixtures classified as international tournaments, EVERY pick (all markets)
+# gets a league_caution warning about poor ROI, regardless of gates passed.
+# The user explicitly rejected "hard skip" on 2026-10-06:
+#   > dont skip picks just caution this league has poor roi
+#
+# Set env OU_INTERNATIONAL_SKIP to a comma-list to RE-ENABLE hard-skip for
+# specific markets if you want (default: empty frozenset = caution only).
+# Use OU_INTERNATIONAL_SKIP=__ALL__ to skip all markets on internationals.
+def _parse_international_skip_markets():
+    raw = os.getenv("OU_INTERNATIONAL_SKIP", "").strip()
+    if raw == "__ALL__":
+        return frozenset(ALL_MARKETS)
+    if raw == "__NONE__" or not raw:
+        return frozenset()
+    return frozenset(m.strip() for m in raw.split(",") if m.strip())
+
+
+INTERNATIONAL_SKIP_MARKETS = _parse_international_skip_markets()
 DEFAULT_ODDS = float(os.getenv("DEFAULT_ODDS", "2.0"))    # decimal odds for EV
 KELLY_FRACTION = float(os.getenv("KELLY_FRACTION", "0.35"))
 MAX_STAKE_PCT = float(os.getenv("MAX_STAKE_PCT", "0.3"))  # % of bankroll per pick
@@ -317,11 +420,67 @@ DATA_DIR = os.getenv("OU_DATA_DIR", os.path.join(os.getcwd(), "data"))
 HISTORY_FILE = os.path.join(DATA_DIR, "prediction_history.json")
 
 # --- league health (caution on leagues where our patterns keep losing) --------
-# Trailing window + minimum sample before a (league, market) pair gets a
-# CAUTION tag. Cautioned picks are TAGGED, never skipped -- and never applied
-# in backtests (that would be lookahead).
-LEAGUE_HEALTH_WINDOW_DAYS = int(os.getenv("OU_LEAGUE_WINDOW_DAYS", "30"))
-LEAGUE_HEALTH_MIN_PICKS = int(os.getenv("OU_LEAGUE_MIN_PICKS", "6"))
+# User workflow (2026-10):
+#   > "i do back tests for 60 days to find messy leagues and be cautious on
+#     each market ... calculate loses deviating from our picks and say they
+#     don't go with us well."
+#
+# A (league, market) pair is flagged CAUTION when all:
+#   1. It has >= LEAGUE_HEALTH_MIN_PICKS settled picks in the trailing window
+#   2. EITHER:
+#      a. profit < 0                               (money loser)
+#      b. win_pct <= baseline_win_pct - LEAGUE_HEALTH_DEV_PCT
+#                                                (win-rate deviates badly vs
+#                                                 what our model targets for
+#                                                 that market -> poor fit)
+#      c. win_pct <= LEAGUE_HEALTH_FLOOR_PCT     (absolute floor, any pair
+#                                                 below is a long-term loser)
+#   AND league is NOT in OU_LEAGUE_ALLOW.
+# Cautioned picks are TAGGED, never skipped -- and never applied in backtests
+# (that would be lookahead bias).
+LEAGUE_HEALTH_WINDOW_DAYS = int(os.getenv("OU_LEAGUE_WINDOW_DAYS", "60"))
+LEAGUE_HEALTH_MIN_PICKS   = int(os.getenv("OU_LEAGUE_MIN_PICKS",  "5"))
+# Deviation gate: if a league/market runs this many pp *below* its expected
+# baseline win-rate, it is flagged as "doesn't go with our picks well".
+# Default 20pp.  Example: home_sc baseline=85% -> any league/home_sc <= 65%
+# win-rate is flagged as caution regardless of profit accounting.
+LEAGUE_HEALTH_DEV_PCT     = float(os.getenv("OU_LEAGUE_DEV_PCT",  "20"))
+# Absolute floor.  Any league/market pair win% below this is ALWAYS flagged
+# (default 55%: anything below is a long-term loser at typical 1.90/2.00 odds).
+LEAGUE_HEALTH_FLOOR_PCT   = float(os.getenv("OU_LEAGUE_FLOOR_PCT","55"))
+
+# Expected baseline win-rates per market -- what our solid gates target.
+# Used ONLY for 60-day backtest "deviation from our picks" benchmarking.
+# Settled all-time averages (good leagues):
+#   home_sc 85, away_sc 83, home_dw 88, over15 90, over 72, btts 65, home 62.
+# under/no_btts baselines included for when user opts back into those markets.
+def _parse_market_baseline_win_pct():
+    raw = os.getenv("MARKET_BASELINE_WIN_PCT", "").strip()
+    base = {
+        "home_sc":   85.0,
+        "away_sc":   83.0,
+        "home_dw":   88.0,
+        "over15":    90.0,
+        "over":      72.0,
+        "btts":      65.0,
+        "home":      62.0,
+        "under35":   72.0,
+        "under":     55.0,
+        "no_btts":   62.0,
+    }
+    if raw:
+        for part in raw.split(","):
+            if ":" not in part:
+                continue
+            m, v = part.split(":", 1)
+            m = m.strip().lower()
+            try:
+                base[m] = float(v.strip().rstrip("%"))
+            except ValueError:
+                continue
+    return base
+
+MARKET_BASELINE_WIN_PCT = _parse_market_baseline_win_pct()
 
 
 def _csv_set(name):

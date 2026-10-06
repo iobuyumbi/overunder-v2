@@ -25,9 +25,9 @@ on:
         default: "3"
         type: string
       markets:
-        description: "Comma-separated markets for publish mode (default: cut under/no_btts losers, track record 42.9%/70.0%)"
+        description: "Comma-separated markets for publish mode (default: cut under/under35/no_btts losers: under 42.9%, under35 66.7%, no_btts 70.0% -- user requested caution)"
         required: false
-        default: "over,over15,under35,btts,home,home_dw,home_sc,away_sc"
+        default: "over,over15,btts,home,home_dw,home_sc,away_sc"
         type: string
       predict_days:
         description: "How many future days to predict (publish/all modes, default 2)"
@@ -45,7 +45,7 @@ concurrency:
 env:
   # --------- Non-secret tunables (edit to taste; MUST mirror values in local .env) ---------
   # Relaxed default form thresholds: 4/6 (2/3 short fallback) for core categories.
-  OU_RULES_VERSION:       "2026-10-03.11-statarea-agreement-report"
+  OU_RULES_VERSION:       "2026-10-06.3-league-health-60d-deviation-gate"
   OU_FREQ:                "scored:4:2,conceded:4:2,over:4:2,blank:4:2,win:3:2,cs:5:3,btts_game:3:2,nowin:4:2"
   OU_DEFAULT_ODDS:        "1.90"
   OU_DEFAULT_STAKE_PCT:   "3"
@@ -267,7 +267,7 @@ jobs:
         timeout-minutes: 120
         run: |
           set +e
-          MARKETS="${{ github.event.inputs.markets || 'over,over15,under35,btts,home,home_dw,home_sc,away_sc' }}"
+          MARKETS="${{ github.event.inputs.markets || 'over,over15,btts,home,home_dw,home_sc,away_sc' }}"
           DAYS="${{ github.event.inputs.predict_days || '2' }}"
           for attempt in 1 2 3; do
             echo "=== PREDICT attempt $attempt (markets=$MARKETS, days=$DAYS) ==="

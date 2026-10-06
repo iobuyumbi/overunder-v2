@@ -719,8 +719,11 @@ class TestLeagueHealth(unittest.TestCase):
         self.assertFalse(health["small sample"]["btts"]["caution"])
         # voids don't count toward league health at all
         self.assertNotIn("voided league", health)
-        # trailing window: losses 60d ago fall outside the default 30d window
-        old = (date.today() - timedelta(days=60)).isoformat()
+        # trailing window: losses far older than the default 60d window fall
+        # outside and don't trigger a caution.  (Previously defaulted to 30d;
+        # 2026-10 updated to 60d per user workflow, so use 90d old losses to
+        # guarantee they're outside.)
+        old = (date.today() - timedelta(days=90)).isoformat()
         hist._save({"pending": [], "settled":
                     [rec("Mystery League", "btts", "L", -0.2, d=old)
                      for _ in range(6)]})

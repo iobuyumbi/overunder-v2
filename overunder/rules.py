@@ -239,6 +239,17 @@ def h2h_check(home_ms, market, away_name):
     return hits * 2 >= n
 
 
+def _venue_or(venue_ms, overall_ms, min_venue=3):
+    """When a venue split has fewer than min_venue matches (typical for
+    international teams that play most games at neutral / away venues),
+    fall back to the team's overall history instead.  Venue form inferred
+    from 0-2 matches is pure noise; overall form is strictly more
+    informative than an all-False result."""
+    if len(venue_ms) >= min_venue:
+        return venue_ms
+    return overall_ms
+
+
 def _freq_cat(cat, ms, fn):
     """Category-tunable frequency rule.  Thresholds come from FREQ_CFG[cat]
     via env OU_FREQ (see config._parse_freq_thresholds):
@@ -271,7 +282,10 @@ def _freq5(ms, fn):
 
 def _strong_unbeaten(ms):
     """Acceptable home form: 4+ wins in 6 outright (2/3rds), OR unbeaten in
-    5 of 6 (draws still count) when wins come with draws."""
+    5 of 6 (draws still count) when wins come with draws.
+
+    Scales proportionally for smaller sample sizes (national teams often
+    only have 3 matches after the _venue_or fallback kicks in)."""
     if not ms:
         return False
     wins_n = sum(1 for m in ms if m["gf"] > m["ga"])
@@ -279,7 +293,7 @@ def _strong_unbeaten(ms):
     n = len(ms)
     if n >= 6:
         return wins_n >= 4 or unbeaten_n >= 5
-    if n >= 4:
+    if n >= 3:
         win_thr = max(1, round(4 * n / 6))
         unb_thr = max(1, round(5 * n / 6))
         return wins_n >= win_thr or unbeaten_n >= unb_thr
@@ -382,11 +396,11 @@ def _under_checks(home_ms, away_ms, lam_h, lam_a):
     a3a = _last(away_ms, 3, "A")
     h6 = _last(home_ms, 6)
     a6 = _last(away_ms, 6)
-    h6H = _last(home_ms, 6, "H")
-    a6A = _last(away_ms, 6, "A")
+    h6H = _venue_or(_last(home_ms, 6, "H"), h6, 3)
+    a6A = _venue_or(_last(away_ms, 6, "A"), a6, 3)
     under_m = lambda m: _tot(m) <= 2.5
     return {
-        "S6":       len(home_ms) >= 4 and len(away_ms) >= 4,
+        "S6":       len(home_ms) >= 3 and len(away_ms) >= 3,
         # Home side
         "UH_BLK":   _freq_cat("blank", h6H, lambda m: m["gf"] == 0),
         "UH_BLK_O": _freq_cat("blank", h6,  lambda m: m["gf"] == 0),
@@ -419,11 +433,11 @@ def _under35_checks(home_ms, away_ms, lam_h, lam_a):
     """
     h6 = _last(home_ms, 6)
     a6 = _last(away_ms, 6)
-    h6H = _last(home_ms, 6, "H")
-    a6A = _last(away_ms, 6, "A")
+    h6H = _venue_or(_last(home_ms, 6, "H"), h6, 3)
+    a6A = _venue_or(_last(away_ms, 6, "A"), a6, 3)
     u35 = lambda m: _tot(m) <= 3
     checks = {
-        "S6":         len(home_ms) >= 4 and len(away_ms) >= 4,
+        "S6":         len(home_ms) >= 3 and len(away_ms) >= 3,
         # Shared defensive core with under: blank + cs evidence
         "UH_BLK":   _freq_cat("blank", h6H, lambda m: m["gf"] == 0),
         "UH_CS":    _freq_cat("cs",    h6H, lambda m: m["ga"] == 0),
@@ -468,13 +482,13 @@ def _no_btts_checks(home_ms, away_ms, lam_h, lam_a):
     a3a = _last(away_ms, 3, "A")
     h6 = _last(home_ms, 6)
     a6 = _last(away_ms, 6)
-    h6H = _last(home_ms, 6, "H")
-    a6A = _last(away_ms, 6, "A")
+    h6H = _venue_or(_last(home_ms, 6, "H"), h6, 3)
+    a6A = _venue_or(_last(away_ms, 6, "A"), a6, 3)
     btts_m = lambda m: m["gf"] > 0 and m["ga"] > 0
     home_blanks = sum(1 for m in h6H if m["gf"] == 0)
     away_blanks = sum(1 for m in a6A if m["gf"] == 0)
     checks = {
-        "S6": len(home_ms) >= 4 and len(away_ms) >= 4,
+        "S6": len(home_ms) >= 3 and len(away_ms) >= 3,
         # Home venue / overall evidence that away team scores zero (CS)
         "NH_BL":     _freq_cat("cs",   h6H, lambda m: m["ga"] == 0),
         "NH_BL_O":   _freq_cat("cs",   h6,  lambda m: m["ga"] == 0),
@@ -509,8 +523,8 @@ def over_path_passes(home_ms, away_ms, checks):
     """
     h6 = _last(home_ms, 6)
     a6 = _last(away_ms, 6)
-    h6H = _last(home_ms, 6, "H")
-    a6A = _last(away_ms, 6, "A")
+    h6H = _venue_or(_last(home_ms, 6, "H"), h6, 3)
+    a6A = _venue_or(_last(away_ms, 6, "A"), a6, 3)
     btts = lambda m: m["gf"] > 0 and m["ga"] > 0
     home_attack_away_leak = (
         checks["H6"] and checks["H7"] and checks["A9"] and checks["A12"])
@@ -584,8 +598,10 @@ def run_checks(home_ms, away_ms, market=None, home_name="", away_name="",
     a3a = _last(away_ms, 3, "A")
     h6 = _last(home_ms, 6)
     a6 = _last(away_ms, 6)
-    h6H = _last(home_ms, 6, "H")
-    a6A = _last(away_ms, 6, "A")
+    h6H_raw = _last(home_ms, 6, "H")
+    a6A_raw = _last(away_ms, 6, "A")
+    h6H = _venue_or(h6H_raw, h6, 3)
+    a6A = _venue_or(a6A_raw, a6, 3)
     over = lambda m: _tot(m) > 2.5
     btts = lambda m: m["gf"] > 0 and m["ga"] > 0
 
@@ -607,7 +623,7 @@ def run_checks(home_ms, away_ms, market=None, home_name="", away_name="",
         "A7": _rate(a6, btts) >= 0.5,
         "A9": _freq_cat("conceded", a6A, lambda m: m["ga"] > 0),
         "A11": _volume_check(a3a, "ga"),
-        "S6": len(home_ms) >= 4 and len(away_ms) >= 4,
+        "S6": len(home_ms) >= 3 and len(away_ms) >= 3,
     }
     # drop base checks that don't count as evidence for this market
     if market in _EXCLUDE:

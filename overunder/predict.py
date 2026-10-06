@@ -13,7 +13,8 @@ from .config import (DEFAULT_ODDS, KELLY_FRACTION, MARKET_MIN_CONF, MAX_STAKE_PC
                      O25_MIN_CONFIDENCE, PREMIUM_TIER, MARKET_PREMIUM, MARKET_SOLID,
                      RULES_VERSION, CACHE_DIR, FREQ_CFG,
                      LEAGUE_AVG_HOME_GOALS, LEAGUE_AVG_AWAY_GOALS,
-                     PREDICT_CACHE_TTL_HOURS, CACHE_DISABLE)
+                     PREDICT_CACHE_TTL_HOURS, CACHE_DISABLE,
+                     is_international_tournament, INTERNATIONAL_SKIP_MARKETS)
 from .rules import CHECK_NAMES, lambdas, market_probs, xg_forecast
 from .teams import normalize
 import json
@@ -226,7 +227,22 @@ def predict_day(provider, day=None, markets=("over",), odds=DEFAULT_ODDS,
 
     picks = []
     for fx in fixtures:
+        league = fx.get("league", "")
+        is_intl = is_international_tournament(league)
         for mkt in markets:
+            # INTERNATIONAL TOURNAMENT POLICY (2026-10-06):
+            #   User ruled out hard-skip: "dont skip picks just caution this league
+            #   has poor roi".  So all markets go through the gate.  But ANY pick
+            #   classified as an international tournament fixture gets a
+            #   league_caution warning auto-tagged (applied below BEFORE manual
+            #   LEAGUE_BLOCK/computed pair_stats, so a more specific warning
+            #   from league health data will override it).
+            #
+            #   Exception: if the user sets env OU_INTERNATIONAL_SKIP to a
+            #   non-empty comma-list (or __ALL__), those markets ARE hard-skipped.
+            #   Default = empty frozenset → caution only, never skip.
+            if is_intl and mkt in INTERNATIONAL_SKIP_MARKETS:
+                continue
             try:
                 p = build_pick(fx, provider, market=mkt, odds=odds)
             except Exception:
@@ -243,20 +259,69 @@ def predict_day(provider, day=None, markets=("over",), odds=DEFAULT_ODDS,
             if (p.get("required_checks_passed", False) and
                     (mkt != "over" or p.get("over_path_passed", False))) and \
                     p["confidence"] >= solid_thr:
+                # Build league_caution with priority:
+                #   1. Manual OU_LEAGUE_BLOCK (entire league) or computed
+                #      60-day health pair_stats with detailed reasons.
+                #      This produces the explicit "doesn't go with our picks"
+                #      verbiage user requested.
+                #   2. International tournament auto-warning.
+                # If BOTH (1) and (2) apply, we combine them -- the user said
+                #   > "any other league with poor roi caution us"
+                # so they want to see every signal.
                 if league_caution:
                     from .leagues import league_key
                     pair_stats, blocked = league_caution
                     lgk = league_key(fx.get("league"))
                     if lgk in blocked:
-                        p["league_caution"] = (
-                            "manually flagged league -- "
-                            "our patterns may not suit this match")
+                        tag = (
+                            "manually flagged league -- our patterns don't "
+                            "suit this competition; reduce stake or skip")
+                        if is_intl:
+                            tag = (
+                                "international tournament + manually flagged "
+                                "league -- avoid this match entirely unless "
+                                "you have a strong contrary opinion")
+                        p["league_caution"] = tag
                     elif (lgk, mkt) in pair_stats:
                         g = pair_stats[(lgk, mkt)]
+                        # Detailed caution_reasons from compute_health list
+                        # EXACTLY why: unprofitable / deviates from our picks
+                        # / below absolute floor.
+                        reasons = g.get("caution_reasons") or []
+                        if reasons:
+                            health_tag = (
+                                "CAUTION: {} in this league (60-day: "
+                                "{}W-{}L {:.1f}% win% {:+.1f}u) -- {}. "
+                                "Reduce stake or skip if unsure."
+                                .format(mkt, g["w"], g["l"], g["win_pct"],
+                                        g["profit"], "; ".join(reasons)))
+                        else:
+                            health_tag = (
+                                "{} in this league: {}W-{}L {:+.1f}u lately -- "
+                                "our patterns may not suit this match"
+                                .format(mkt, g["w"], g["l"], g["profit"]))
+                        if is_intl:
+                            p["league_caution"] = (
+                                "international tournament + league-health "
+                                "warning for {}: {}. Poor fit overall; "
+                                "reduce stake or skip."
+                                .format(mkt, health_tag))
+                        else:
+                            p["league_caution"] = health_tag
+                    elif is_intl:
+                        # No specific pair caution (or not enough sample yet
+                        # for 60-day), but it IS an international tournament.
                         p["league_caution"] = (
-                            f"{mkt} in this league: {g['w']}W-{g['l']}L "
-                            f"{g['profit']:+.1f}u lately -- "
-                            f"our patterns may not suit this match")
+                            "international tournament -- poor ROI track "
+                            "record on this competition; reduce stake or "
+                            "skip if unsure")
+                elif is_intl:
+                    # league_caution disabled entirely (LEAGUE_AVOID_DISABLE=1
+                    # or backtest/demo) -- still tag internationals.
+                    p["league_caution"] = (
+                        "international tournament -- poor ROI track "
+                        "record on this competition; reduce stake or "
+                        "skip if unsure")
                 picks.append(p)
     # number within each market, ordered by confidence
     for mkt in markets:
@@ -286,4 +351,45 @@ def predict_day(provider, day=None, markets=("over",), odds=DEFAULT_ODDS,
                 json.dump(pruned, f)
         except OSError:
             pass
-    return picks
+
+import argparse
+import sys
+import os # already imported, but good to ensure
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Generate picks for a given day and markets.")
+    parser.add_argument("--day", help="Date in YYYY-MM-DD format (defaults to today).")
+    parser.add_argument("--markets", nargs="+", default=["over"],
+                        help="Markets to predict (e.g., over home_sc btts).")
+    parser.add_argument("--odds", type=float, default=DEFAULT_ODDS,
+                        help="Default odds for EV calculation.")
+    parser.add_argument("--min-conf", type=float, default=O25_MIN_CONFIDENCE,
+                        help="Minimum confidence for a pick to be emitted.")
+    parser.add_argument("--market-min-conf", type=json.loads,
+                        help="""JSON string of per-market min conf (e.g., '{"home": 0.82}').""")
+    parser.add_argument("--no-cache", action="store_true",
+                        help="Disable all caching for this run.")
+
+    args = parser.parse_args()
+
+    # Override CACHE_DISABLE if --no-cache is used
+    if args.no_cache:
+        from overunder import config
+        config.CACHE_DISABLE = True
+
+    from .providers import SoccerbaseProvider
+    provider = SoccerbaseProvider()
+
+    picks = predict_day(
+        provider,
+        day=args.day,
+        markets=args.markets,
+        odds=args.odds,
+        min_conf=args.min_conf,
+        market_min_conf=args.market_min_conf
+    )
+
+    json.dump(picks, sys.stdout, indent=2)
+
+
