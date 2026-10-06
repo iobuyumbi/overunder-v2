@@ -164,7 +164,7 @@ def cmd_fixture_audit(args):
     # fixture-audit is always diagnostic: show ALL, no league_caution skips,
     # statarea DIVERGE tagged but not filtered.
     args.no_statarea_filter = True
-    dates = [args.date or __import__("datetime").date.today().isoformat()]
+    dates = _date_range(args)
     caution = None
     if not args.demo and not config.LEAGUE_AVOID_DISABLE:
         from . import leagues as lg
@@ -1026,6 +1026,8 @@ def main(argv=None):
     p = sub.add_parser("fixture-audit",
                        help="full card audit (no skips): show per-market PASS/GATE + top missed checks so you manually pick")
     p.add_argument("--date", default=None)
+    p.add_argument("--days", type=int, default=1,
+                   help="audit N days from --date (default today)")
     p.add_argument("--demo", action="store_true")
     p.add_argument("--markets", default=",".join(config.DEFAULT_PUBLISH_MARKETS))
     p.add_argument("--odds", type=float, default=config.DEFAULT_ODDS)
