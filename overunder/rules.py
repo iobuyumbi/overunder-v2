@@ -103,6 +103,10 @@ def _build_check_names(freq):
     return {
         # Positive markets (kept unchanged for backcompat in missed-check labels)
         "H1": "Home goals L3 home (7+)",
+        "O25_H2": "Over25Tips: home venue Over 2.5 (2+/3)",
+        "O25_A2": "Over25Tips: away previous match total goals (2+)",
+        "O25_A3": "Over25Tips: away scored (2+/3 overall)",
+        "O25_A4": "Over25Tips: away venue Over 2.5 (2+/3)",
         "H2": f"Home over 2.5 ({o}+/6 home)",
         "H3": "Home over 2.5 (L6 overall, >=50%)",
         "H4": "Home BTTS (L6 home, >=50%)",
@@ -312,8 +316,9 @@ def _strong_unbeaten(ms):
 #   Pure-over rate evidence (H2/H3/A4/A5 = 50% Over 2.5 bars) is KEPT.
 #
 #   EXCLUDED from Over (counts removed from denominator to clean signal):
-#     (a) L3 volume streak noise (H1/A1/H10/A11) — kills "one lucky blowout
-#         in L3 form is good enough" weak filters
+#     (a) conceded-volume streak noise (H10/A11) — weak one-sided filters.
+#     The original Over25Tips H1/A1/A2/A3/A4 criteria remain in the Over
+#     confidence profile, alongside the current matchup-path checks.
 #     (b) standalone BTTS-rate checks (HB/AB/H5/A7); O_PATH is a separate
 #         signal. O_PATH separately allows strong open-game history only when
 #         paired with the opposing team's full scoring or conceding profile.
@@ -346,8 +351,8 @@ def _strong_unbeaten(ms):
 #     about zero-goal halves, not "fewer than 3 goals total".
 _EXCLUDE = {
     "over":    {"H4", "A6",
-                # L3 volume streak noise: "one blowout in 3 games" is weak signal
-                "H1", "A1", "H10", "A11",
+                # conceded-volume streak noise: weak one-sided filters
+                "H10", "A11",
                 # BTTS-rate / BTTS-game evidence = BTTS domain, NOT Over
                 # (Over cares about TOTAL goals >= 3, not "goals on both sides");
                 # NB BTTS itself excludes ALL 8 of H2/H3/H4/H5/A4/A5/A6/A7 + streaks
@@ -666,6 +671,22 @@ def run_checks(home_ms, away_ms, market=None, home_name="", away_name="",
             "H12": _freq_cat("conceded", h6, lambda m: m["ga"] > 0),
             "A12": _freq_cat("conceded", a6, lambda m: m["ga"] > 0),
         })
+        if market == "over":
+            # Keep the original Over25Tips.com criteria as explicit confidence
+            # votes. Insufficient samples fail the indicator instead of
+            # passing on a partial three-match window.
+            h3_home = _last(home_ms, 3, "H")
+            a3_away = _last(away_ms, 3, "A")
+            a3_all = _last(away_ms, 3)
+            checks.update({
+                "O25_H2": (len(h3_home) == 3 and
+                           sum(1 for m in h3_home if _tot(m) >= 3) >= 2),
+                "O25_A2": bool(away_ms and _tot(away_ms[-1]) >= 2),
+                "O25_A3": (len(a3_all) == 3 and
+                           sum(1 for m in a3_all if m["gf"] > 0) >= 2),
+                "O25_A4": (len(a3_away) == 3 and
+                           sum(1 for m in a3_away if _tot(m) >= 3) >= 2),
+            })
     elif market == "btts":
         # btts = home_sc U away_sc -- the full union:
         #   Requires BOTH teams to show their own scoring and conceding form:

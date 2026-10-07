@@ -41,7 +41,8 @@ MARKET_LABEL = {"over": "Over 2.5", "under": "Under 2.5", "btts": "BTTS",
 # Negative markets (under/under35/no_btts) use INDEPENDENT check IDs with
 # semantic prefixes UH_/UA_/U35_/NH_/NA_/NB_ (not u/n suffix mirrors).
 CORE_CHECKS = {
-    "over":    ["H6", "H7", "A9", "A12",
+    "over":    ["H1", "O25_H2", "O25_A2", "O25_A3", "O25_A4",
+                "A1", "H6", "H7", "A9", "A12",
                 "A3", "A8", "H8", "H12",
                 "H2", "H3", "A4", "A5", "O_PATH", "H2H"],
     "under":   ["UH_BLK", "UH_CS", "UH_BLK_O", "UH_CS_O",
@@ -128,10 +129,11 @@ def build_pick(fixture, provider, market="over", odds=DEFAULT_ODDS, before=None,
 
     total = len(checks)
     check_ratio = round(passed / total, 3) if total else 0.0
-    # When a strong scoring profile meets the other side's leakage profile,
-    # don't dilute the Over estimate with the scorer's defensive weakness or
-    # the opponent's attacking form: either can be irrelevant to 3 total goals.
-    relevant_ratio = 1.0 if directional_path else check_ratio
+    # Preserve the Over check-ratio blend even when the directional path
+    # passes. The other scoring markets may use directional evidence as their
+    # confidence basis, but that shortcut broadened Over 2.5 too aggressively.
+    relevant_ratio = (1.0 if directional_path and market != "over"
+                      else check_ratio)
     conf = min(0.98, p * (0.70 + 0.30 * relevant_ratio)) if total else 0.0
     conf = round(conf, 3)
     if isinstance(odds, dict):
@@ -165,7 +167,7 @@ def build_pick(fixture, provider, market="over", odds=DEFAULT_ODDS, before=None,
         "over_directional_path_passed": over_directional_path,
         "directional_path_passed": directional_path,
         "confidence_basis": ("directional attack vs opposing leakage"
-                             if directional_path
+                             if directional_path and market != "over"
                              else "market probability blended with check ratio"),
         "required_checks_passed": required_checks_passed,
         "missed": missed, "ev": ev, "edge_pct": round(ev * 100, 1),
@@ -304,9 +306,14 @@ def predict_day(provider, day=None, markets=("over",), odds=DEFAULT_ODDS,
                     continue
             thr = mmc.get(mkt) or min_conf
             if market_min_conf is None:
-                solid_thr = (OVER_DIRECTIONAL_MIN_CONFIDENCE
-                             if p.get("over_directional_path_passed")
-                             else MARKET_SOLID.get(mkt, thr))
+                if mkt == "over":
+                    # Over 2.5 uses the stable conservative floor regardless
+                    # of which qualifying evidence path it followed.
+                    solid_thr = max(OVER_DIRECTIONAL_MIN_CONFIDENCE,
+                                    MARKET_MIN_CONF.get(mkt, thr),
+                                    MARKET_SOLID.get(mkt, thr))
+                else:
+                    solid_thr = MARKET_SOLID.get(mkt, thr)
             else:
                 solid_thr = thr
             gate_reasons = []

@@ -626,8 +626,10 @@ def cmd_backtest(args):
                     thr = min_conf
                 else:
                     fallback_thr = MARKET_MIN_CONF.get(mkt) or min_conf
-                    if mkt == "over" and p.get("over_directional_path_passed"):
-                        thr = OVER_DIRECTIONAL_MIN_CONFIDENCE
+                    if mkt == "over":
+                        thr = max(OVER_DIRECTIONAL_MIN_CONFIDENCE,
+                                  MARKET_MIN_CONF.get(mkt, fallback_thr),
+                                  MARKET_SOLID.get(mkt, fallback_thr))
                     else:
                         thr = MARKET_SOLID.get(mkt, fallback_thr)
                 if p["confidence"] < thr:

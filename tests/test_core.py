@@ -379,11 +379,9 @@ class TestRulesVenueOverall(unittest.TestCase):
         self.assertEqual(len(checks), 18)
         self.assertNotIn("H2H", checks)
         with_h2h = run_checks(home, home, market="over", home_name="A", away_name="B")
-        # Over 2.5 (rewritten 2026-10-03.5): base dict 18 minus 11 excludes
-        # (H1/A1/H10/A11 streaks + HB/AB/H5/A7 BTTS-pattern + H4/A6 legacy) = 7,
-        # plus injection (A8 + H12 + A12 = 3) plus H2H append (1) = 7-0 base keep +
-        # (base S6 already there + 3 injection + H2H) -> denom 14.
-        self.assertEqual(len(with_h2h), 14)
+        # Over 2.5 keeps the original Over25Tips venue/last-match signals as
+        # confidence votes, alongside the current attack/leakage evidence.
+        self.assertEqual(len(with_h2h), 20)
         self.assertIn("H2H", with_h2h)
         # Attack⇄leakage pair signature: home_sc profile (H6/H7 ATT + A9/A12 LEAK)
         # and away_sc profile (A3/A8 ATT + H8/H12 LEAK) must ALL be present in over.
