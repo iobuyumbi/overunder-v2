@@ -3,9 +3,6 @@
 POSITIVE markets -- rule sets are coupled so that BTTS is the literal union
 of the two team-to-score markets. Frequency thresholds come from FREQ_CFG
 (tunable per category via OU_FREQ; scored/conceded default to 4/6, with 2/3 fallback).
-The home_sc and away_sc markets require the scoring side to score in all six
-venue matches and all six overall matches. BTTS applies that same scoring
-requirement to both teams, alongside each opponent's conceding evidence.
 Key relationships (enforced via _EXCLUDE and the btts override block):
 
   home_sc  = home attack (H6/H7, scored category)
@@ -16,8 +13,8 @@ Key relationships (enforced via _EXCLUDE and the btts override block):
            + HOME defence LEAKAGE (H8 home-venue, H12 overall, conceded cat)
            + L3 volume confirmations (A1 away GF, H10 home GA)
 
-  btts     = both teams must score in all six venue and overall matches, and
-             each opponent must meet the configured venue and overall conceded thresholds.
+  btts     = both teams must score and concede regularly in their venue and
+             overall histories, using the configured frequency thresholds.
 
   over     -- needs a full scoring attack facing a full opponent leakage
              profile, OR open-game form paired with the other side's full
@@ -353,7 +350,7 @@ def _strong_unbeaten(ms):
 _EXCLUDE = {
     "over":    {"H4", "A6",
                 # conceded-volume streak noise: weak one-sided filters
-                "H1", "A1", "H10", "A11",
+                "H10", "A11",
                 # BTTS-rate / BTTS-game evidence = BTTS domain, NOT Over
                 # (Over cares about TOTAL goals >= 3, not "goals on both sides");
                 # NB BTTS itself excludes ALL 8 of H2/H3/H4/H5/A4/A5/A6/A7 + streaks
@@ -675,27 +672,35 @@ def run_checks(home_ms, away_ms, market=None, home_name="", away_name="",
             "H12": _freq_cat("conceded", h6, lambda m: m["ga"] > 0),
             "A12": _freq_cat("conceded", a6, lambda m: m["ga"] > 0),
         })
+        if market == "over":
+            # Over25Tips' published Over 2.5 criteria: H1/A1 require 7+
+            # goals in the last three venue games; these four additional
+            # checks cover recent over rates and away scoring form.
+            h3_home = _last(home_ms, 3, "H")
+            a3_away = _last(away_ms, 3, "A")
+            a3_all = _last(away_ms, 3)
+            checks.update({
+                "H1": _volume_check(h3_home, "gf"),
+                "A1": _volume_check(a3_away, "gf"),
+                "O25_H2": (len(h3_home) == 3 and
+                           sum(1 for m in h3_home if _tot(m) >= 3) >= 2),
+                "O25_A2": bool(away_ms and _tot(away_ms[-1]) >= 2),
+                "O25_A3": (len(a3_all) == 3 and
+                           sum(1 for m in a3_all if m["gf"] > 0) >= 2),
+                "O25_A4": (len(a3_away) == 3 and
+                           sum(1 for m in a3_away if _tot(m) >= 3) >= 2),
+            })
     elif market == "btts":
         # btts = home_sc U away_sc -- the full union:
-        #   Both teams must score in all six venue matches and all six overall
-        #   matches. Each opponent must also meet its configured conceded-rate
-        #   checks for venue and overall history.
+        #   Both teams must show their configured scoring and conceded rates
+        #   in venue and overall histories.
         # Base checks already provide A9/A11 and H8/H10; we add the venue+overall
-        # conceded rates (A12/H12 via conceded category). Strict scoring IDs
-        # keep BTTS aligned with the standalone team-to-score markets.
-        checks.pop("H6", None)
-        checks.pop("H7", None)
-        checks.pop("A3", None)
-        checks.pop("A13", None)
+        # conceded rates (A12/H12 via conceded category) and away overall score.
         checks.update({
-            "H6S": (len(h6H_raw) == 6 and
-                    all(m["gf"] > 0 for m in h6H_raw)),
-            "H6SO": (len(h6) == 6 and
-                     all(m["gf"] > 0 for m in h6)),
-            "A6S": (len(a6A_raw) == 6 and
-                    all(m["gf"] > 0 for m in a6A_raw)),
-            "A6SO": (len(a6) == 6 and
-                     all(m["gf"] > 0 for m in a6)),
+            "H6": _freq_cat("scored", h6H, lambda m: m["gf"] > 0),
+            "H7": _freq_cat("scored", h6, lambda m: m["gf"] > 0),
+            "A3": _freq_cat("scored", a6A, lambda m: m["gf"] > 0),
+            "A13": _freq_cat("scored", a6, lambda m: m["gf"] > 0),
             "A12": _freq_cat("conceded", a6, lambda m: m["ga"] > 0),
             "H12": _freq_cat("conceded", h6, lambda m: m["ga"] > 0),
         })
@@ -713,25 +718,14 @@ def run_checks(home_ms, away_ms, market=None, home_name="", away_name="",
         # home_sc: home attack (scored freq) + AWAY concedes (venue freq via base A9,
         # venue volume via A11, plus overall A12 via conceded category).
         checks["A12"] = _freq_cat("conceded", a6, lambda m: m["ga"] > 0)
-        # Team-to-score markets require a perfect recent scoring run: six of
-        # six at the relevant venue and six of six overall. Keep these strict
-        # checks local to home_sc so Over and BTTS retain their own thresholds.
-        checks.pop("H6", None)
-        checks.pop("H7", None)
-        checks["H6S"] = (len(h6H_raw) == 6 and
-                         all(m["gf"] > 0 for m in h6H_raw))
-        checks["H6SO"] = (len(h6) == 6 and
-                          all(m["gf"] > 0 for m in h6))
+        checks["H6"] = _freq_cat("scored", h6H, lambda m: m["gf"] > 0)
+        checks["H7"] = _freq_cat("scored", h6, lambda m: m["gf"] > 0)
     elif market == "away_sc":
         # away_sc: away attack (scored freq) + HOME concedes (venue freq via base H8,
         # venue volume via H10, plus overall H12 via conceded category).
-        checks.pop("A3", None)
-        checks.pop("A13", None)
         checks.update({
-            "A6S": (len(a6A_raw) == 6 and
-                    all(m["gf"] > 0 for m in a6A_raw)),
-            "A6SO": (len(a6) == 6 and
-                     all(m["gf"] > 0 for m in a6)),
+            "A3": _freq_cat("scored", a6A, lambda m: m["gf"] > 0),
+            "A13": _freq_cat("scored", a6, lambda m: m["gf"] > 0),
             "H12": _freq_cat("conceded", h6, lambda m: m["ga"] > 0),
         })
     elif market == "home_dw":

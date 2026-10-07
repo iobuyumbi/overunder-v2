@@ -381,8 +381,8 @@ class TestRulesVenueOverall(unittest.TestCase):
         self.assertEqual(len(checks), 18)
         self.assertNotIn("H2H", checks)
         with_h2h = run_checks(home, home, market="over", home_name="A", away_name="B")
-        # Over 2.5 check set uses the current attack/leakage and over-rate evidence.
-        self.assertEqual(len(with_h2h), 14)
+        # Over 2.5 combines current attack/leakage evidence with Over25Tips votes.
+        self.assertEqual(len(with_h2h), 20)
         self.assertIn("H2H", with_h2h)
         # Attack⇄leakage pair signature: home_sc profile (H6/H7 ATT + A9/A12 LEAK)
         # and away_sc profile (A3/A8 ATT + H8/H12 LEAK) must ALL be present in over.
@@ -461,14 +461,14 @@ class TestFourOfSixAndNegativeMarkets(unittest.TestCase):
             regular = [M("H", 2, 1), M("A", 1, 0), M("H", 0, 1), M("A", 2, 2),
                        M("H", 1, 1), M("A", 1, 0)]
             c = _rc(regular, regular, market="btts", home_name="A", away_name="B")
-            self.assertFalse(c["H6SO"])
-            self.assertFalse(c["A6SO"])
-            self.assertFalse(c["H6S"])
+            self.assertFalse(c["H7"])
+            self.assertFalse(c["A13"])
+            self.assertFalse(c["H6"])
             self.assertFalse(c["A9"])
             perfect = [M("H", 2, 1), M("A", 1, 2), M("H", 1, 1), M("A", 2, 2),
                        M("H", 3, 1), M("A", 1, 1)]
             c2 = _rc(perfect, perfect, market="btts", home_name="A", away_name="B")
-            self.assertTrue(c2["H6S"] and c2["H6SO"] and c2["A6S"] and c2["A6SO"])
+            self.assertTrue(c2["H6"] and c2["H7"] and c2["A3"] and c2["A13"])
         finally:
             os.environ.pop("OU_FREQ", None)
             importlib.reload(cfg)

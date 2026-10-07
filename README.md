@@ -75,11 +75,10 @@ Or just:  run_local.bat   (Windows, does all of the above; `run_local.bat demo` 
 - Home win, home/away team-to-score, BTTS, and Over 2.5 use directional
   scoring-versus-conceding evidence. For a one-team scoring market the other
   side's scoring and the scorer's own conceding form are optional; BTTS needs
-  both directional pairs, with both teams scoring in all six venue and overall
-  matches. Over 2.5 keeps its check-ratio confidence blend,
+  both directional pairs. Over 2.5 keeps its check-ratio confidence blend,
   requires its attack/leakage path, and defaults to a conservative 0.85 floor.
-  Home/away team-to-score picks require the scoring team to have scored in all
-  six recent matches at that venue and in all six overall matches.
+  Home/away team-to-score picks use the configured scored-frequency threshold.
+  Over 2.5 also includes the six published Over25Tips short-run criteria.
 - Postponed matches may show as MISSING in verify; that is flagged, never
   silently wrong.
 - Never delete prediction_history.json mid-run; if a clean slate is needed,
