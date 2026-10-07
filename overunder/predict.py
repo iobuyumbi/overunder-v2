@@ -50,8 +50,8 @@ CORE_CHECKS = {
                 "UA_GA_L3",
                 "UH_UND_O", "UA_UND_O",
                 "H2H"],
-    "btts":    ["H6", "H7", "A9", "A12",
-                "A3", "A13", "H8", "H12", "H2H"],
+    "btts":    ["H6S", "H6SO", "A9", "A12",
+                "A6S", "A6SO", "H8", "H12", "H2H"],
     "no_btts": ["NH_BL", "NH_BL_OWN", "NH_BL_O",
                 "NA_BL", "NA_BL_OWN", "NA_BL_O",
                 "NH_BTTS_O", "NA_BTTS_O",
@@ -79,7 +79,7 @@ REQUIRED_MARKET_CHECKS = {
     "home_dw": ("H6", "H7", "A9", "A12", "H14", "A14"),
     "home_sc": ("H6S", "H6SO", "A9", "A12"),
     "away_sc": ("A6S", "A6SO", "H8", "H12"),
-    "btts": ("H6", "H7", "H8", "H12", "A3", "A13", "A9", "A12"),
+    "btts": ("H6S", "H6SO", "H8", "H12", "A6S", "A6SO", "A9", "A12"),
 }
 
 

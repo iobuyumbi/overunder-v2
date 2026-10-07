@@ -3,8 +3,9 @@
 POSITIVE markets -- rule sets are coupled so that BTTS is the literal union
 of the two team-to-score markets. Frequency thresholds come from FREQ_CFG
 (tunable per category via OU_FREQ; scored/conceded default to 4/6, with 2/3 fallback).
-The dedicated home_sc and away_sc markets require the scoring side to score in
-all six venue matches and all six overall matches.
+The home_sc and away_sc markets require the scoring side to score in all six
+venue matches and all six overall matches. BTTS applies that same scoring
+requirement to both teams, alongside each opponent's conceding evidence.
 Key relationships (enforced via _EXCLUDE and the btts override block):
 
   home_sc  = home attack (H6/H7, scored category)
@@ -15,8 +16,8 @@ Key relationships (enforced via _EXCLUDE and the btts override block):
            + HOME defence LEAKAGE (H8 home-venue, H12 overall, conceded cat)
            + L3 volume confirmations (A1 away GF, H10 home GA)
 
-  btts     = both teams must score regularly and concede regularly in their
-             venue and overall histories (each uses the configured frequency threshold).
+  btts     = both teams must score in all six venue and overall matches, and
+             each opponent must meet the configured venue and overall conceded thresholds.
 
   over     -- needs a full scoring attack facing a full opponent leakage
              profile, OR open-game form paired with the other side's full
@@ -676,19 +677,25 @@ def run_checks(home_ms, away_ms, market=None, home_name="", away_name="",
         })
     elif market == "btts":
         # btts = home_sc U away_sc -- the full union:
-        #   Requires BOTH teams to show their own scoring and conceding form:
-        #   home scored H6/H7 + home conceded H8/H12; away scored A3/A13 +
-        #   away conceded A9/A12. Each pair covers venue and overall history.
-        #   Thus each team has been scoring and conceding, independently of
-        #   whether the other team is strong or weak.
+        #   Both teams must score in all six venue matches and all six overall
+        #   matches. Each opponent must also meet its configured conceded-rate
+        #   checks for venue and overall history.
         # Base checks already provide A9/A11 and H8/H10; we add the venue+overall
-        # conceded rates (A12/H12 via conceded category) and overall scoring
-        # (H7/A13 via scored category).
+        # conceded rates (A12/H12 via conceded category). Strict scoring IDs
+        # keep BTTS aligned with the standalone team-to-score markets.
+        checks.pop("H6", None)
+        checks.pop("H7", None)
+        checks.pop("A3", None)
+        checks.pop("A13", None)
         checks.update({
-            "H6": _freq_cat("scored", h6H, lambda m: m["gf"] > 0),
-            "H7": _freq_cat("scored", h6, lambda m: m["gf"] > 0),
-            "A3": _freq_cat("scored", a6A, lambda m: m["gf"] > 0),
-            "A13": _freq_cat("scored", a6, lambda m: m["gf"] > 0),
+            "H6S": (len(h6H_raw) == 6 and
+                    all(m["gf"] > 0 for m in h6H_raw)),
+            "H6SO": (len(h6) == 6 and
+                     all(m["gf"] > 0 for m in h6)),
+            "A6S": (len(a6A_raw) == 6 and
+                    all(m["gf"] > 0 for m in a6A_raw)),
+            "A6SO": (len(a6) == 6 and
+                     all(m["gf"] > 0 for m in a6)),
             "A12": _freq_cat("conceded", a6, lambda m: m["ga"] > 0),
             "H12": _freq_cat("conceded", h6, lambda m: m["ga"] > 0),
         })

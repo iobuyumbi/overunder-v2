@@ -461,14 +461,14 @@ class TestFourOfSixAndNegativeMarkets(unittest.TestCase):
             regular = [M("H", 2, 1), M("A", 1, 0), M("H", 0, 1), M("A", 2, 2),
                        M("H", 1, 1), M("A", 1, 0)]
             c = _rc(regular, regular, market="btts", home_name="A", away_name="B")
-            self.assertFalse(c["H7"])
-            self.assertFalse(c["A13"])
-            self.assertFalse(c["H6"])
+            self.assertFalse(c["H6SO"])
+            self.assertFalse(c["A6SO"])
+            self.assertFalse(c["H6S"])
             self.assertFalse(c["A9"])
             perfect = [M("H", 2, 1), M("A", 1, 2), M("H", 1, 1), M("A", 2, 2),
                        M("H", 3, 1), M("A", 1, 1)]
             c2 = _rc(perfect, perfect, market="btts", home_name="A", away_name="B")
-            self.assertTrue(c2["H6"] and c2["H7"] and c2["A3"] and c2["A13"])
+            self.assertTrue(c2["H6S"] and c2["H6SO"] and c2["A6S"] and c2["A6SO"])
         finally:
             os.environ.pop("OU_FREQ", None)
             importlib.reload(cfg)

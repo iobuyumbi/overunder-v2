@@ -245,7 +245,7 @@ MARKET_SOLID = _parse_market_solid()
 # Bump this string whenever rules.py logic, check sets, gates, premium tiers,
 # or the confidence formula change. It is mixed into the predict_day cache
 # signature so stale picks computed under older rules are never served.
-RULES_VERSION = os.getenv("OU_RULES_VERSION", "2026-10-08.9-strict-team-scoring")
+RULES_VERSION = os.getenv("OU_RULES_VERSION", "2026-10-08.10-strict-btts-scoring")
 
 # -----------------------------------------------------------------------------
 # Supported + default-publish markets.
