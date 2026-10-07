@@ -41,8 +41,7 @@ MARKET_LABEL = {"over": "Over 2.5", "under": "Under 2.5", "btts": "BTTS",
 # Negative markets (under/under35/no_btts) use INDEPENDENT check IDs with
 # semantic prefixes UH_/UA_/U35_/NH_/NA_/NB_ (not u/n suffix mirrors).
 CORE_CHECKS = {
-    "over":    ["H1", "O25_H2", "O25_A2", "O25_A3", "O25_A4",
-                "A1", "H6", "H7", "A9", "A12",
+    "over":    ["H6", "H7", "A9", "A12",
                 "A3", "A8", "H8", "H12",
                 "H2", "H3", "A4", "A5", "O_PATH", "H2H"],
     "under":   ["UH_BLK", "UH_CS", "UH_BLK_O", "UH_CS_O",
@@ -59,8 +58,8 @@ CORE_CHECKS = {
                 "NB_BOTH", "NB_LAM",
                 "H2H"],
     "home":    ["H6", "H7", "A9", "A12", "H14", "A16", "H16", "H2H"],
-    "home_sc": ["H6", "H7", "S6", "A9", "A12", "H2H"],
-    "away_sc": ["A3", "A13", "S6", "H8", "H12", "H2H"],
+    "home_sc": ["H6S", "H6SO", "S6", "A9", "A12", "H2H"],
+    "away_sc": ["A6S", "A6SO", "S6", "H8", "H12", "H2H"],
     "over15":  ["H6", "A9", "A12",
                 "A3", "A8", "H8", "H12",
                 "H2", "H3", "A4", "A5", "H2H"],
@@ -78,8 +77,8 @@ CORE_CHECKS = {
 REQUIRED_MARKET_CHECKS = {
     "home": ("H6", "H7", "A9", "A12"),
     "home_dw": ("H6", "H7", "A9", "A12", "H14", "A14"),
-    "home_sc": ("H6", "H7", "A9", "A12"),
-    "away_sc": ("A3", "A13", "H8", "H12"),
+    "home_sc": ("H6S", "H6SO", "A9", "A12"),
+    "away_sc": ("A6S", "A6SO", "H8", "H12"),
     "btts": ("H6", "H7", "H8", "H12", "A3", "A13", "A9", "A12"),
 }
 

@@ -175,7 +175,7 @@ class TestDirectionalOverPath(unittest.TestCase):
         }
         self.assertTrue(over_attack_leak_path_passes(checks))
 
-    def test_directional_over_confidence_ignores_unrelated_checks(self):
+    def test_directional_over_keeps_check_ratio_in_confidence(self):
         class StaticProvider:
             def team_matches(self, team, before=None):
                 if team == "Home":
@@ -187,7 +187,9 @@ class TestDirectionalOverPath(unittest.TestCase):
         pick = build_pick(fixture, StaticProvider(), market="over",
                           include_gate_audit=True)
         self.assertTrue(pick["over_directional_path_passed"])
-        self.assertEqual(pick["confidence"], pick["model_p"])
+        expected_conf = round(pick["model_p"] *
+                              (0.70 + 0.30 * pick["check_ratio"]), 3)
+        self.assertEqual(pick["confidence"], expected_conf)
 
     def test_directional_path_uses_its_own_over_gate(self):
         from unittest.mock import patch
@@ -207,7 +209,7 @@ class TestDirectionalOverPath(unittest.TestCase):
                                 markets=("over",))
         self.assertEqual(len(picks), 1)
         self.assertTrue(picks[0]["over_directional_path_passed"])
-        self.assertGreaterEqual(picks[0]["confidence"], 0.68)
+        self.assertGreaterEqual(picks[0]["confidence"], 0.85)
 
 
 class TestDirectionalScoringMarkets(unittest.TestCase):
@@ -379,9 +381,8 @@ class TestRulesVenueOverall(unittest.TestCase):
         self.assertEqual(len(checks), 18)
         self.assertNotIn("H2H", checks)
         with_h2h = run_checks(home, home, market="over", home_name="A", away_name="B")
-        # Over 2.5 keeps the original Over25Tips venue/last-match signals as
-        # confidence votes, alongside the current attack/leakage evidence.
-        self.assertEqual(len(with_h2h), 20)
+        # Over 2.5 check set uses the current attack/leakage and over-rate evidence.
+        self.assertEqual(len(with_h2h), 14)
         self.assertIn("H2H", with_h2h)
         # Attack⇄leakage pair signature: home_sc profile (H6/H7 ATT + A9/A12 LEAK)
         # and away_sc profile (A3/A8 ATT + H8/H12 LEAK) must ALL be present in over.

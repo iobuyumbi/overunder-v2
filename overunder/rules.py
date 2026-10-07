@@ -3,6 +3,8 @@
 POSITIVE markets -- rule sets are coupled so that BTTS is the literal union
 of the two team-to-score markets. Frequency thresholds come from FREQ_CFG
 (tunable per category via OU_FREQ; scored/conceded default to 4/6, with 2/3 fallback).
+The dedicated home_sc and away_sc markets require the scoring side to score in
+all six venue matches and all six overall matches.
 Key relationships (enforced via _EXCLUDE and the btts override block):
 
   home_sc  = home attack (H6/H7, scored category)
@@ -103,16 +105,14 @@ def _build_check_names(freq):
     return {
         # Positive markets (kept unchanged for backcompat in missed-check labels)
         "H1": "Home goals L3 home (7+)",
-        "O25_H2": "Over25Tips: home venue Over 2.5 (2+/3)",
-        "O25_A2": "Over25Tips: away previous match total goals (2+)",
-        "O25_A3": "Over25Tips: away scored (2+/3 overall)",
-        "O25_A4": "Over25Tips: away venue Over 2.5 (2+/3)",
         "H2": f"Home over 2.5 ({o}+/6 home)",
         "H3": "Home over 2.5 (L6 overall, >=50%)",
         "H4": "Home BTTS (L6 home, >=50%)",
         "H5": "Home BTTS (L6 overall, >=50%)",
         "H6": f"Home scored ({s}+/6 home)",
         "H7": f"Home scored ({s}+/6 overall)",
+        "H6S": "Home scored (6/6 at home)",
+        "H6SO": "Home scored (6/6 overall)",
         "H8": f"Home conceded ({c}+/6 home)",
         "H10": "Home conceded 7+ (L3 home)",
         "H12": f"Home concedes ({c}+/6 overall)",
@@ -131,6 +131,8 @@ def _build_check_names(freq):
         "A11": "Away conceded 7+ (L3 away)",
         "A12": f"Away concedes ({c}+/6 overall)",
         "A13": f"Away scored ({s}+/6 overall)",
+        "A6S": "Away scored (6/6 away)",
+        "A6SO": "Away scored (6/6 overall)",
         "A14": f"Away winless ({n}+/6 away)",
         "A15": f"Away winless ({n}+/6 overall)",
         "A16": f"Away no win ({n}+/6 away)",
@@ -317,8 +319,6 @@ def _strong_unbeaten(ms):
 #
 #   EXCLUDED from Over (counts removed from denominator to clean signal):
 #     (a) conceded-volume streak noise (H10/A11) — weak one-sided filters.
-#     The original Over25Tips H1/A1/A2/A3/A4 criteria remain in the Over
-#     confidence profile, alongside the current matchup-path checks.
 #     (b) standalone BTTS-rate checks (HB/AB/H5/A7); O_PATH is a separate
 #         signal. O_PATH separately allows strong open-game history only when
 #         paired with the opposing team's full scoring or conceding profile.
@@ -352,7 +352,7 @@ def _strong_unbeaten(ms):
 _EXCLUDE = {
     "over":    {"H4", "A6",
                 # conceded-volume streak noise: weak one-sided filters
-                "H10", "A11",
+                "H1", "A1", "H10", "A11",
                 # BTTS-rate / BTTS-game evidence = BTTS domain, NOT Over
                 # (Over cares about TOTAL goals >= 3, not "goals on both sides");
                 # NB BTTS itself excludes ALL 8 of H2/H3/H4/H5/A4/A5/A6/A7 + streaks
@@ -521,14 +521,17 @@ def _no_btts_checks(home_ms, away_ms, lam_h, lam_a):
 
 def home_sc_leak_path_passes(checks):
     """Home scoring evidence paired with the away side's conceding record."""
-    return bool(checks["H6"] and checks["H7"]
+    home_venue = checks.get("H6S", checks.get("H6", False))
+    home_overall = checks.get("H6SO", checks.get("H7", False))
+    return bool(home_venue and home_overall
                 and checks["A9"] and checks["A12"])
 
 
 def away_sc_leak_path_passes(checks):
     """Away scoring evidence paired with the home side's conceding record."""
-    overall_scoring = checks.get("A13", checks.get("A8", False))
-    return bool(checks["A3"] and overall_scoring
+    away_venue = checks.get("A6S", checks.get("A3", False))
+    overall_scoring = checks.get("A6SO", checks.get("A13", checks.get("A8", False)))
+    return bool(away_venue and overall_scoring
                 and checks["H8"] and checks["H12"])
 
 
@@ -671,22 +674,6 @@ def run_checks(home_ms, away_ms, market=None, home_name="", away_name="",
             "H12": _freq_cat("conceded", h6, lambda m: m["ga"] > 0),
             "A12": _freq_cat("conceded", a6, lambda m: m["ga"] > 0),
         })
-        if market == "over":
-            # Keep the original Over25Tips.com criteria as explicit confidence
-            # votes. Insufficient samples fail the indicator instead of
-            # passing on a partial three-match window.
-            h3_home = _last(home_ms, 3, "H")
-            a3_away = _last(away_ms, 3, "A")
-            a3_all = _last(away_ms, 3)
-            checks.update({
-                "O25_H2": (len(h3_home) == 3 and
-                           sum(1 for m in h3_home if _tot(m) >= 3) >= 2),
-                "O25_A2": bool(away_ms and _tot(away_ms[-1]) >= 2),
-                "O25_A3": (len(a3_all) == 3 and
-                           sum(1 for m in a3_all if m["gf"] > 0) >= 2),
-                "O25_A4": (len(a3_away) == 3 and
-                           sum(1 for m in a3_away if _tot(m) >= 3) >= 2),
-            })
     elif market == "btts":
         # btts = home_sc U away_sc -- the full union:
         #   Requires BOTH teams to show their own scoring and conceding form:
@@ -719,14 +706,25 @@ def run_checks(home_ms, away_ms, market=None, home_name="", away_name="",
         # home_sc: home attack (scored freq) + AWAY concedes (venue freq via base A9,
         # venue volume via A11, plus overall A12 via conceded category).
         checks["A12"] = _freq_cat("conceded", a6, lambda m: m["ga"] > 0)
-        checks["H6"] = _freq_cat("scored", h6H, lambda m: m["gf"] > 0)
-        checks["H7"] = _freq_cat("scored", h6, lambda m: m["gf"] > 0)
+        # Team-to-score markets require a perfect recent scoring run: six of
+        # six at the relevant venue and six of six overall. Keep these strict
+        # checks local to home_sc so Over and BTTS retain their own thresholds.
+        checks.pop("H6", None)
+        checks.pop("H7", None)
+        checks["H6S"] = (len(h6H_raw) == 6 and
+                         all(m["gf"] > 0 for m in h6H_raw))
+        checks["H6SO"] = (len(h6) == 6 and
+                          all(m["gf"] > 0 for m in h6))
     elif market == "away_sc":
         # away_sc: away attack (scored freq) + HOME concedes (venue freq via base H8,
         # venue volume via H10, plus overall H12 via conceded category).
+        checks.pop("A3", None)
+        checks.pop("A13", None)
         checks.update({
-            "A3": _freq_cat("scored", a6A, lambda m: m["gf"] > 0),
-            "A13": _freq_cat("scored", a6, lambda m: m["gf"] > 0),
+            "A6S": (len(a6A_raw) == 6 and
+                    all(m["gf"] > 0 for m in a6A_raw)),
+            "A6SO": (len(a6) == 6 and
+                     all(m["gf"] > 0 for m in a6)),
             "H12": _freq_cat("conceded", h6, lambda m: m["ga"] > 0),
         })
     elif market == "home_dw":
