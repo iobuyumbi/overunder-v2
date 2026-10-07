@@ -576,7 +576,10 @@ def cmd_backtest(args):
     from .providers import SoccerbaseProvider, load_history_db
     from .predict import build_pick
     from .history import _settle_one
-    from .config import O25_MIN_CONFIDENCE
+    from .config import (INTERNATIONAL_SKIP_MARKETS, MARKET_MIN_CONF,
+                         MARKET_SOLID,
+                         OVER_DIRECTIONAL_MIN_CONFIDENCE,
+                         is_international_tournament)
     prov = SoccerbaseProvider()
     mkts = _markets(args.markets)
     min_conf = args.min_conf
@@ -607,11 +610,26 @@ def cmd_backtest(args):
                   "home": r["home"], "away": r["away"]}
             for mkt in mkts:
                 p = build_pick(fx, prov, market=mkt, odds=args.odds, before=d)
+                # Match live prediction eligibility: a confidence score alone
+                # is not enough for markets with required evidence paths.
+                # In particular, Over must pass its attack-v-leakage/open-game
+                # path or the replay overstates the number of publishable picks.
+                if not p.get("required_checks_passed", False):
+                    continue
+                if mkt == "over" and not p.get("over_path_passed", False):
+                    continue
+                if (is_international_tournament(r["league"])
+                        and mkt in INTERNATIONAL_SKIP_MARKETS):
+                    continue
+
                 if args.no_market_thresholds:
                     thr = min_conf
                 else:
-                    from .config import MARKET_MIN_CONF as _MMC
-                    thr = _MMC.get(mkt) or min_conf
+                    fallback_thr = MARKET_MIN_CONF.get(mkt) or min_conf
+                    if mkt == "over" and p.get("over_directional_path_passed"):
+                        thr = OVER_DIRECTIONAL_MIN_CONFIDENCE
+                    else:
+                        thr = MARKET_SOLID.get(mkt, fallback_thr)
                 if p["confidence"] < thr:
                     continue
                 res = _settle_one(p, r["hg"], r["ag"])
@@ -696,7 +714,10 @@ def cmd_backtest(args):
             print("  " + v)
         if not audit_violations:
             print("  clean: every pick used only pre-match form")
-    print(f"({days_used} match days replayed, min_confidence {min_conf}, "
+    threshold_mode = (f"flat min_confidence {min_conf}"
+                      if args.no_market_thresholds
+                      else "live market thresholds")
+    print(f"({days_used} match days replayed, {threshold_mode}, "
           f"odds {args.odds})")
 
 
