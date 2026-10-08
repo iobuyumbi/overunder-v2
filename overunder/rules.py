@@ -5,11 +5,11 @@ of the two team-to-score markets. Frequency thresholds come from FREQ_CFG
 (tunable per category via OU_FREQ; scored/conceded default to 4/6, with 2/3 fallback).
 Key relationships (enforced via _EXCLUDE and the btts override block):
 
-  home_sc  = home attack (H6/H7, scored category)
+  home_sc  = home attack (H6SO: 6/6 scored overall)
            + AWAY defence LEAKAGE (A9 away-venue, A12 overall, conceded cat)
            + L3 volume confirmations (H1 home GF, A11 away GA)
 
-  away_sc  = away attack (A3/A13, scored category)
+  away_sc  = away attack (A6SO: 6/6 scored overall)
            + HOME defence LEAKAGE (H8 home-venue, H12 overall, conceded cat)
            + L3 volume confirmations (A1 away GF, H10 home GA)
 
@@ -323,8 +323,8 @@ def _points_pct(ms):
 #   Over now pairs attack evidence the SAME WAY btts does: each half of the
 #   union is a to_score profile (home_sc or away_sc) which is "attack of one
 #   side ⇄ leakage of the other side".
-#     Home half (home_sc profile): H6/H7 (home ATTACK) + A9/A12 (AWAY LEAKAGE)
-#     Away half (away_sc profile): A3/A8 (away ATTACK) + H8/H12 (HOME LEAKAGE)
+#     Home half (home_sc profile): home scoring + A9/A12 (AWAY LEAKAGE)
+#     Away half (away_sc profile): away scoring + H8/H12 (HOME LEAKAGE)
 #   Pure-over rate evidence (H2/H3/A4/A5 = 50% Over 2.5 bars) is KEPT.
 #
 #   EXCLUDED from Over (counts removed from denominator to clean signal):
@@ -525,17 +525,17 @@ def _no_btts_checks(home_ms, away_ms, lam_h, lam_a):
 
 def home_sc_leak_path_passes(checks):
     """Home scoring evidence paired with the away side's conceding record."""
-    home_venue = checks.get("H6S", checks.get("H6", False))
-    home_overall = checks.get("H6SO", checks.get("H7", False))
-    return bool(home_venue and home_overall
+    home_attack = (checks["H6SO"] if "H6SO" in checks else
+                   checks.get("H6", False) and checks.get("H7", False))
+    return bool(home_attack
                 and checks["A9"] and checks["A12"])
 
 
 def away_sc_leak_path_passes(checks):
     """Away scoring evidence paired with the home side's conceding record."""
-    away_venue = checks.get("A6S", checks.get("A3", False))
-    overall_scoring = checks.get("A6SO", checks.get("A13", checks.get("A8", False)))
-    return bool(away_venue and overall_scoring
+    away_attack = (checks["A6SO"] if "A6SO" in checks else
+                   checks.get("A3", False) and checks.get("A13", checks.get("A8", False)))
+    return bool(away_attack
                 and checks["H8"] and checks["H12"])
 
 
@@ -718,17 +718,20 @@ def run_checks(home_ms, away_ms, market=None, home_name="", away_name="",
             "AP_LT50": ap is not None and ap < 0.50,
         })
     elif market == "home_sc":
-        # home_sc: home attack (scored freq) + AWAY concedes (venue freq via base A9,
-        # venue volume via A11, plus overall A12 via conceded category).
+        # Home scoring markets require the home team to score in all six recent
+        # matches overall; opponent leakage remains required at venue and overall.
+        checks.pop("H6", None)
+        checks.pop("H7", None)
         checks["A12"] = _freq_cat("conceded", a6, lambda m: m["ga"] > 0)
-        checks["H6"] = _freq_cat("scored", h6H, lambda m: m["gf"] > 0)
-        checks["H7"] = _freq_cat("scored", h6, lambda m: m["gf"] > 0)
+        checks["H6SO"] = len(h6) == 6 and all(m["gf"] > 0 for m in h6)
     elif market == "away_sc":
-        # away_sc: away attack (scored freq) + HOME concedes (venue freq via base H8,
-        # venue volume via H10, plus overall H12 via conceded category).
+        # Away scoring markets require the away team to score in all six recent
+        # matches overall; opponent leakage remains required at venue and overall.
+        checks.pop("A3", None)
+        checks.pop("A8", None)
+        checks.pop("A13", None)
         checks.update({
-            "A3": _freq_cat("scored", a6A, lambda m: m["gf"] > 0),
-            "A13": _freq_cat("scored", a6, lambda m: m["gf"] > 0),
+            "A6SO": len(a6) == 6 and all(m["gf"] > 0 for m in a6),
             "H12": _freq_cat("conceded", h6, lambda m: m["ga"] > 0),
         })
     elif market == "home_dw":

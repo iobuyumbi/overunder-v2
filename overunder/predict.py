@@ -54,8 +54,8 @@ CORE_CHECKS = {
                 "NB_BOTH", "NB_LAM",
                 "H2H"],
     "home":    ["HP50", "HP_EDGE", "AP_LT50", "H2H"],
-    "home_sc": ["H6", "H7", "S6", "A9", "A12", "H2H"],
-    "away_sc": ["A3", "A13", "S6", "H8", "H12", "H2H"],
+    "home_sc": ["H6SO", "S6", "A9", "A12", "H2H"],
+    "away_sc": ["A6SO", "S6", "H8", "H12", "H2H"],
     "over15":  ["O15_HV", "O15_AV", "H6", "A9", "A12",
                 "A3", "A8", "H8", "H12",
                 "H2", "H3", "A4", "A5", "H2H"],
@@ -75,8 +75,8 @@ REQUIRED_MARKET_CHECKS = {
     "under": ("UH_UND", "UA_UND"),
     "home": ("HP50", "HP_EDGE"),
     "home_dw": ("HP50", "HP_NOT_WORSE"),
-    "home_sc": ("H6", "H7", "A9", "A12"),
-    "away_sc": ("A3", "A13", "H8", "H12"),
+    "home_sc": ("H6SO", "A9", "A12"),
+    "away_sc": ("A6SO", "H8", "H12"),
     "btts": ("H6", "A3"),
 }
 
