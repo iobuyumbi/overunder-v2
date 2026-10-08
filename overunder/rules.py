@@ -95,6 +95,7 @@ def _build_check_names(freq):
         # Positive markets (kept unchanged for backcompat in missed-check labels)
         "H1": "Home goals L3 home (7+)",
         "H2": f"Home over 2.5 ({o}+/6 home)",
+        "H2R": "Home over 2.5 (2+/3 recent home)",
         "O15_HV": "Home over 1.5 (4+/6 at home)",
         "O15_AV": "Away over 1.5 (4+/6 away)",
         "H3": "Home over 2.5 (L6 overall, >=50%)",
@@ -114,6 +115,7 @@ def _build_check_names(freq):
         "A1": "Away goals L3 away (7+)",
         "A3": f"Away scored ({s}+/6 away)",
         "A4": f"Away over 2.5 ({o}+/6 away)",
+        "A4R": "Away over 2.5 (2+/3 recent away)",
         "A5": "Away over 2.5 (L6 overall, >=50%)",
         "A6": "Away BTTS (L6 away, >=50%)",
         "A7": "Away BTTS (L6 overall, >=50%)",
@@ -364,17 +366,17 @@ _EXCLUDE = {
                 # (Over cares about TOTAL goals >= 3, not "goals on both sides");
                 # NB BTTS itself excludes ALL 8 of H2/H3/H4/H5/A4/A5/A6/A7 + streaks
                 "HB", "AB", "H5", "A7"},
-    "over15":  {"H4", "H7", "A6", "H1", "A1", "A11", "H10",
+    "over15":  {"H4", "H7", "A6", "A11", "H10",
                 # Same BTTS-pattern cleanup as Over 2.5: BTTS-rate is not Over signal
                 "HB", "AB", "H5", "A7"},
     "btts":    {"H2", "H3", "H4", "H5", "A4", "A5", "A6", "A7",
-                "H1", "A11", "A1", "H10"},
+                "A11", "H10"},
     "home":    {"H2", "H3", "H4", "H5", "H8", "H10", "A1", "A3",
                 "A4", "A5", "A6", "A7", "A11", "H17"},
-    "home_sc": {"H2", "H3", "H4", "H5", "H8", "H10", "A1", "A3",
-                "A4", "A5", "A6", "A7", "H1", "A11"},
-    "away_sc": {"H1", "H2", "H3", "H4", "H5", "H6", "H7",
-                "A4", "A5", "A6", "A7", "A9", "A11", "A1", "H10"},
+    "home_sc": {"H2", "H3", "H4", "H5", "H8", "H10", "A3",
+                "A4", "A5", "A6", "A7", "A11"},
+    "away_sc": {"H2", "H3", "H4", "H5", "H6", "H7",
+                "A4", "A5", "A6", "A7", "A9", "A11", "H10"},
     "home_dw": {"H2", "H3", "H4", "H5", "H8", "H10", "A1", "A3",
                 "A4", "A5", "A6", "A7", "A11", "H17"},
     "under":   {"UH_GF_L3", "UA_GF_L3"},
@@ -682,6 +684,13 @@ def run_checks(home_ms, away_ms, market=None, home_name="", away_name="",
             "H12": _freq_cat("conceded", h6, lambda m: m["ga"] > 0),
             "A12": _freq_cat("conceded", a6, lambda m: m["ga"] > 0),
         })
+        # Over25Tips' H2/A4 short-window trend: 2+ of each team's last 3
+        # venue games went over 2.5. Keep these as optional evidence; the
+        # established 4-of-6 venue gates below remain the eligibility rule.
+        checks["H2R"] = (len(h3h) == 3 and
+                         sum(1 for m in h3h if _tot(m) > 2.5) >= 2)
+        checks["A4R"] = (len(a3a) == 3 and
+                         sum(1 for m in a3a if _tot(m) > 2.5) >= 2)
         if market == "over":
             checks["H2"] = _venue_4_of_6(
                 home_ms, "H", lambda m: _tot(m) > 2.5)
