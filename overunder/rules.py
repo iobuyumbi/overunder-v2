@@ -13,22 +13,13 @@ Key relationships (enforced via _EXCLUDE and the btts override block):
            + HOME defence LEAKAGE (H8 home-venue, H12 overall, conceded cat)
            + L3 volume confirmations (A1 away GF, H10 home GA)
 
-  btts     = both teams must score and concede regularly in their venue and
-             overall histories, using the configured frequency thresholds.
+  btts     = each team scored in 4 of its last 6 matches at its own venue.
 
-  over     -- needs a full scoring attack facing a full opponent leakage
-             profile, OR open-game form paired with the other side's full
-             scoring or conceding profile. Also uses Over-rate checks.
-  over15   -- uses the same venue+overall scoring/leak checks, plus Over-rate checks
-  home     -- home dominance (H16, win category) + acceptable-form rule
-             (H14/H15: 4 wins/6 OR unbeaten 5/6) + home solidity (H17)
-             + away no-win (A16, nowin cat) + away leaks (A9/A12)
-  over   (O 2.5) -- requires one coherent attack/leak or open-game path;
-             component checks include H6/H7/A3/A8 scoring, H8/H12/A9/A12
-             conceding, H2/H3/A4/A5 Over rates, and H2H.
-  over15 (O 1.5) -- same symmetric attack⇄leakage Over profile minus the
-             H7-strong-attack and overall-venue over-rate bars (Over1.5 fires
-             on more ordinary attack evidence, so those are over-filtering).
+  over     -- each team's 4-of-6 venue match totals must exceed 2.5.
+  over15   -- each team's 4-of-6 venue match totals must exceed 1.5.
+  under    -- each team's 4-of-6 venue match totals must be 2.5 or lower.
+  home/home_dw -- compare points earned per possible point in recent home-venue
+                  and away-venue histories.
 
 NEGATIVE markets (under, under35, no_btts) -- INDEPENDENT Statarea-style
 rule sets, each with its own base dict, _EXCLUDE filter, injected per-market
@@ -104,6 +95,8 @@ def _build_check_names(freq):
         # Positive markets (kept unchanged for backcompat in missed-check labels)
         "H1": "Home goals L3 home (7+)",
         "H2": f"Home over 2.5 ({o}+/6 home)",
+        "O15_HV": "Home over 1.5 (4+/6 at home)",
+        "O15_AV": "Away over 1.5 (4+/6 away)",
         "H3": "Home over 2.5 (L6 overall, >=50%)",
         "H4": "Home BTTS (L6 home, >=50%)",
         "H5": "Home BTTS (L6 overall, >=50%)",
@@ -138,6 +131,10 @@ def _build_check_names(freq):
         "A18": f"Away blanked ({b}+/6 away)",
         "S6": "Both teams active",
         "H2H": "Head-to-head pattern",
+        "HP50": "Home points form at home (50%+)",
+        "HP_EDGE": "Home points form stronger than away away-form",
+        "HP_NOT_WORSE": "Home points form at least as strong as away away-form",
+        "AP_LT50": "Away points form away (below 50%)",
         "HB": f"Home BTTS game ({t}+/6 home)",
         "AB": f"Away BTTS game ({t}+/6 away)",
         "O_PATH": "Over evidence: attack vs leaky defence or open-game form",
@@ -269,6 +266,12 @@ def _freq_cat(cat, ms, fn):
     return False
 
 
+def _venue_4_of_6(ms, venue, predicate):
+    """Require 4+ qualifying results in the last six matches at this venue."""
+    recent = _last(ms, 6, venue)
+    return len(recent) == 6 and sum(1 for m in recent if predicate(m)) >= 4
+
+
 def _freq4(ms, fn):
     """Legacy wrapper: scored-conceded-over-blank default category = 4/6, 2/3."""
     return _freq_cat("scored", ms, fn)
@@ -304,6 +307,15 @@ def _strong_unbeaten(ms):
     return False
 
 
+def _points_pct(ms):
+    """Earned league points as a share of maximum points from recent matches."""
+    if len(ms) < 3:
+        return None
+    points = sum(3 if m["gf"] > m["ga"] else 1 if m["gf"] == m["ga"] else 0
+                 for m in ms[-6:])
+    return points / (3 * len(ms[-6:]))
+
+
 # Design: attack⇄leakage pairs are the high-signal evidence union, NOT the
 # noisy "every-attack-streak" set.
 #
@@ -317,10 +329,7 @@ def _strong_unbeaten(ms):
 #
 #   EXCLUDED from Over (counts removed from denominator to clean signal):
 #     (a) conceded-volume streak noise (H10/A11) — weak one-sided filters.
-#     (b) standalone BTTS-rate checks (HB/AB/H5/A7); O_PATH is a separate
-#         signal. O_PATH separately allows strong open-game history only when
-#         paired with the opposing team's full scoring or conceding profile.
-#   O_PATH is an eligibility condition, not an extra confidence vote.
+#     (b) standalone BTTS-rate checks (HB/AB/H5/A7) are not total-goal evidence.
 #
 # DESIGN NOTE for the three scoring markets:
 #   home_sc drops its OWN conceded checks (H8/H10 irrelevant: home doesn't
@@ -350,7 +359,7 @@ def _strong_unbeaten(ms):
 _EXCLUDE = {
     "over":    {"H4", "A6",
                 # conceded-volume streak noise: weak one-sided filters
-                "H10", "A11",
+                "H1", "A1", "H10", "A11",
                 # BTTS-rate / BTTS-game evidence = BTTS domain, NOT Over
                 # (Over cares about TOTAL goals >= 3, not "goals on both sides");
                 # NB BTTS itself excludes ALL 8 of H2/H3/H4/H5/A4/A5/A6/A7 + streaks
@@ -368,10 +377,7 @@ _EXCLUDE = {
                 "A4", "A5", "A6", "A7", "A9", "A11", "A1", "H10"},
     "home_dw": {"H2", "H3", "H4", "H5", "H8", "H10", "A1", "A3",
                 "A4", "A5", "A6", "A7", "A11", "H17"},
-    "under":   {"UH_GF_L3", "UA_GF_L3",
-                # exclude patterns that measure HIGH total goal volume
-                # on the positive side (irrelevant / double-counting):
-                "UH_UND", "UA_UND"},
+    "under":   {"UH_GF_L3", "UA_GF_L3"},
     "under35": {"U35_GF_CAP", "U35_GA_CAP"},
     "no_btts": {"NH_BTTS_L3", "NA_BTTS_L3",
                 # exclude btts-rate measures that double-count NB_BOTH logic
@@ -601,6 +607,10 @@ def run_checks(home_ms, away_ms, market=None, home_name="", away_name="",
 
     if market == "under":
         checks = _under_checks(home_ms, away_ms, lam_h, lam_a)
+        checks["UH_UND"] = _venue_4_of_6(
+            home_ms, "H", lambda m: _tot(m) <= 2.5)
+        checks["UA_UND"] = _venue_4_of_6(
+            away_ms, "A", lambda m: _tot(m) <= 2.5)
         checks["H2H"] = h2h_check(home_ms, "under", away_name)
         if market in _EXCLUDE:
             for k in _EXCLUDE[market]:
@@ -673,46 +683,39 @@ def run_checks(home_ms, away_ms, market=None, home_name="", away_name="",
             "A12": _freq_cat("conceded", a6, lambda m: m["ga"] > 0),
         })
         if market == "over":
-            # Over25Tips' published Over 2.5 criteria: H1/A1 require 7+
-            # goals in the last three venue games; these four additional
-            # checks cover recent over rates and away scoring form.
-            h3_home = _last(home_ms, 3, "H")
-            a3_away = _last(away_ms, 3, "A")
-            a3_all = _last(away_ms, 3)
-            checks.update({
-                "H1": _volume_check(h3_home, "gf"),
-                "A1": _volume_check(a3_away, "gf"),
-                "O25_H2": (len(h3_home) == 3 and
-                           sum(1 for m in h3_home if _tot(m) >= 3) >= 2),
-                "O25_A2": bool(away_ms and _tot(away_ms[-1]) >= 2),
-                "O25_A3": (len(a3_all) == 3 and
-                           sum(1 for m in a3_all if m["gf"] > 0) >= 2),
-                "O25_A4": (len(a3_away) == 3 and
-                           sum(1 for m in a3_away if _tot(m) >= 3) >= 2),
-            })
+            checks["H2"] = _venue_4_of_6(
+                home_ms, "H", lambda m: _tot(m) > 2.5)
+            checks["A4"] = _venue_4_of_6(
+                away_ms, "A", lambda m: _tot(m) > 2.5)
+        else:
+            checks["O15_HV"] = _venue_4_of_6(
+                home_ms, "H", lambda m: _tot(m) > 1.5)
+            checks["O15_AV"] = _venue_4_of_6(
+                away_ms, "A", lambda m: _tot(m) > 1.5)
     elif market == "btts":
         # btts = home_sc U away_sc -- the full union:
-        #   Both teams must show their configured scoring and conceded rates
-        #   in venue and overall histories.
+        #   Each team's venue scoring rate is a hard 4-of-6 condition;
+        #   other evidence remains optional confidence support.
         # Base checks already provide A9/A11 and H8/H10; we add the venue+overall
         # conceded rates (A12/H12 via conceded category) and away overall score.
         checks.update({
-            "H6": _freq_cat("scored", h6H, lambda m: m["gf"] > 0),
+            "H6": _venue_4_of_6(home_ms, "H", lambda m: m["gf"] > 0),
             "H7": _freq_cat("scored", h6, lambda m: m["gf"] > 0),
-            "A3": _freq_cat("scored", a6A, lambda m: m["gf"] > 0),
+            "A3": _venue_4_of_6(away_ms, "A", lambda m: m["gf"] > 0),
             "A13": _freq_cat("scored", a6, lambda m: m["gf"] > 0),
             "A12": _freq_cat("conceded", a6, lambda m: m["ga"] > 0),
             "H12": _freq_cat("conceded", h6, lambda m: m["ga"] > 0),
         })
     elif market == "home":
-        # Home-win evidence: home attack against an away defence that leaks,
-        # plus home form and away road no-win form.
+        # Compare points-per-match at each team's venue rather than win counts.
+        hp = _points_pct(_last(home_ms, 6, "H"))
+        ap = _points_pct(_last(away_ms, 6, "A"))
         checks.update({
             "A12": _freq_cat("conceded", a6, lambda m: m["ga"] > 0),
-            "H14": _strong_unbeaten(h6H),
-            "H15": _strong_unbeaten(h6),
-            "H16": _freq_cat("win", h6H, lambda m: m["gf"] > m["ga"]),
-            "A16": _freq_cat("nowin", a6A, lambda m: m["gf"] <= m["ga"]),
+            "HP50": hp is not None and hp >= 0.50,
+            "HP_EDGE": hp is not None and ap is not None and hp > ap,
+            "HP_NOT_WORSE": hp is not None and ap is not None and hp >= ap,
+            "AP_LT50": ap is not None and ap < 0.50,
         })
     elif market == "home_sc":
         # home_sc: home attack (scored freq) + AWAY concedes (venue freq via base A9,
@@ -729,14 +732,16 @@ def run_checks(home_ms, away_ms, market=None, home_name="", away_name="",
             "H12": _freq_cat("conceded", h6, lambda m: m["ga"] > 0),
         })
     elif market == "home_dw":
-        # home's evidence but draw-friendly: winless (not loss-heavy) away
+        # For 1X, home points form can equal the away points form.
+        hp = _points_pct(_last(home_ms, 6, "H"))
+        ap = _points_pct(_last(away_ms, 6, "A"))
         checks.update({
             "A12": _freq_cat("conceded", a6, lambda m: m["ga"] > 0),
-            "H14": _strong_unbeaten(h6H),
-            "H15": _strong_unbeaten(h6),
+            "HP50": hp is not None and hp >= 0.50,
+            "HP_EDGE": hp is not None and ap is not None and hp > ap,
+            "HP_NOT_WORSE": hp is not None and ap is not None and hp >= ap,
+            "AP_LT50": ap is not None and ap < 0.50,
             "H17": _low_volume_check(h3h, "ga", 2, 0.7),
-            "A14": _freq_cat("nowin", a6A, lambda m: m["gf"] <= m["ga"]),
-            "A15": _freq_cat("nowin", a6, lambda m: m["gf"] <= m["ga"]),
             "A17": _low_volume_check(a3a, "gf", 4, 1.0),
             "A18": _freq_cat("blank", a6A, lambda m: m["gf"] == 0),
         })

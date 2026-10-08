@@ -72,13 +72,15 @@ Or just:  run_local.bat   (Windows, does all of the above; `run_local.bat demo` 
 - Backtests are honest (point-in-time `before` filtering, enforced in code
   and covered by a regression test) but assume flat odds -- stress with
   --odds 1.9.
-- Home win, home/away team-to-score, BTTS, and Over 2.5 use directional
-  scoring-versus-conceding evidence. For a one-team scoring market the other
-  side's scoring and the scorer's own conceding form are optional; BTTS needs
-  both directional pairs. Over 2.5 keeps its check-ratio confidence blend,
-  requires its attack/leakage path, and defaults to a conservative 0.85 floor.
-  Home/away team-to-score picks use the configured scored-frequency threshold.
-  Over 2.5 also includes the six published Over25Tips short-run criteria.
+- Over 1.5 and Over 2.5 require 4 of the last 6 home-venue and away-venue
+  matches to clear their respective goal lines. BTTS requires both teams to
+  have scored in 4 of their last 6 matches at their own venue; Under 2.5
+  requires 4 of 6 venue matches under the line for both teams. Other checks
+  contribute optional confidence evidence. Over 2.5 retains its 0.85 floor.
+- Home win and home-or-draw compare points earned per available recent home
+  and away venue match. The former requires the home side to have at least
+  50% of possible points and a better points rate than the away side; the
+  latter allows equal rates. League-table positions are not currently used.
 - Postponed matches may show as MISSING in verify; that is flagged, never
   silently wrong.
 - Never delete prediction_history.json mid-run; if a clean slate is needed,

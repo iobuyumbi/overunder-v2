@@ -16,7 +16,7 @@ from .config import (DEFAULT_ODDS, KELLY_FRACTION, MARKET_MIN_CONF, MAX_STAKE_PC
                      LEAGUE_AVG_HOME_GOALS, LEAGUE_AVG_AWAY_GOALS,
                      PREDICT_CACHE_TTL_HOURS, CACHE_DISABLE,
                      is_international_tournament, INTERNATIONAL_SKIP_MARKETS)
-from .rules import CHECK_NAMES, lambdas, market_probs, xg_forecast
+from .rules import CHECK_NAMES, _points_pct, lambdas, market_probs, xg_forecast
 from .teams import normalize
 import json
 import os
@@ -33,35 +33,30 @@ MARKET_LABEL = {"over": "Over 2.5", "under": "Under 2.5", "btts": "BTTS",
 # DESIGN NOTE: btts = home_sc U away_sc (literal set union in run_checks)
 #   home_sc CORE_CHECKS + away_sc CORE_CHECKS minus S6 overlap = btts CORE_CHECKS
 #
-# Over/Over15 (rewritten 2026-10-03.5): symmetric attack⇄leakage pairs —
-# home_sc profile (H6/H7 ATT + A9/A12 LEAK) + away_sc profile (A3/A8 ATT +
-# H8/H12 LEAK) + pure over-rate 50% bars (H2/H3 + A4/A5) + H2H.
-# Over 2.5 must also pass O_PATH: at least one full attack-v-leakage pair, or
-# open-game evidence paired with the other team's full scoring/conceding form.
+# Goal totals use venue-specific 4-of-6 requirements for both teams.
 # Negative markets (under/under35/no_btts) use INDEPENDENT check IDs with
 # semantic prefixes UH_/UA_/U35_/NH_/NA_/NB_ (not u/n suffix mirrors).
 CORE_CHECKS = {
-    "over":    ["H1", "O25_H2", "O25_A2", "O25_A3", "O25_A4",
-                "A1", "H6", "H7", "A9", "A12",
+    "over":    ["H2", "A4", "H6", "H7", "A9", "A12",
                 "A3", "A8", "H8", "H12",
-                "H2", "H3", "A4", "A5", "O_PATH", "H2H"],
-    "under":   ["UH_BLK", "UH_CS", "UH_BLK_O", "UH_CS_O",
+                "H3", "A5", "H2H"],
+    "under":   ["UH_UND", "UA_UND", "UH_BLK", "UH_CS", "UH_BLK_O", "UH_CS_O",
                 "UH_GA_L3",
                 "UA_BLK", "UA_CS", "UA_BLK_O", "UA_CS_O",
                 "UA_GA_L3",
                 "UH_UND_O", "UA_UND_O",
                 "H2H"],
-    "btts":    ["H6", "H7", "A9", "A12",
-                "A3", "A13", "H8", "H12", "H2H"],
+    "btts":    ["H6", "A3", "H7", "A9", "A12",
+                "A13", "H8", "H12", "H2H"],
     "no_btts": ["NH_BL", "NH_BL_OWN", "NH_BL_O",
                 "NA_BL", "NA_BL_OWN", "NA_BL_O",
                 "NH_BTTS_O", "NA_BTTS_O",
                 "NB_BOTH", "NB_LAM",
                 "H2H"],
-    "home":    ["H6", "H7", "A9", "A12", "H14", "A16", "H16", "H2H"],
+    "home":    ["HP50", "HP_EDGE", "AP_LT50", "H2H"],
     "home_sc": ["H6", "H7", "S6", "A9", "A12", "H2H"],
     "away_sc": ["A3", "A13", "S6", "H8", "H12", "H2H"],
-    "over15":  ["H6", "A9", "A12",
+    "over15":  ["O15_HV", "O15_AV", "H6", "A9", "A12",
                 "A3", "A8", "H8", "H12",
                 "H2", "H3", "A4", "A5", "H2H"],
     "under35": ["UH_BLK", "UH_CS",
@@ -69,18 +64,20 @@ CORE_CHECKS = {
                 "U35_NOHI", "U35_NOAI", "U35_NOHI_O", "U35_NOAI_O",
                 "UH_UND", "UA_UND", "UH_UND_O", "UA_UND_O",
                 "H2H"],
-    "home_dw": ["H6", "H7", "A9", "A12",
-                "H14", "H15", "A14", "A15", "A17", "A18", "H2H"],
+    "home_dw": ["HP50", "HP_NOT_WORSE", "AP_LT50", "H2H"],
 }
 
 # These scored/conceded patterns are eligibility requirements, not soft votes
 # in the confidence blend. FREQ_CFG supplies the active per-category bars.
 REQUIRED_MARKET_CHECKS = {
-    "home": ("H6", "H7", "A9", "A12"),
-    "home_dw": ("H6", "H7", "A9", "A12", "H14", "A14"),
+    "over": ("H2", "A4"),
+    "over15": ("O15_HV", "O15_AV"),
+    "under": ("UH_UND", "UA_UND"),
+    "home": ("HP50", "HP_EDGE"),
+    "home_dw": ("HP50", "HP_NOT_WORSE"),
     "home_sc": ("H6", "H7", "A9", "A12"),
     "away_sc": ("A3", "A13", "H8", "H12"),
-    "btts": ("H6", "H7", "H8", "H12", "A3", "A13", "A9", "A12"),
+    "btts": ("H6", "A3"),
 }
 
 
@@ -89,7 +86,6 @@ def build_pick(fixture, provider, market="over", odds=DEFAULT_ODDS, before=None,
     """If include_gate_audit=True, the returned dict gains audit_* fields:
       - audit_required_failed: list[str] of REQUIRED check IDs that failed
       - audit_optional_failed: list[str] of CORE (non-required) check IDs that failed
-      - audit_over_path_failed: bool, True if market=="over" and over_path_passes returned False
       - audit_all_checks: {check_id: bool} full run_checks dict (for custom drill-down)
     Used by `fixture-audit` so users can see exactly why a market was gated out.
     """
@@ -99,13 +95,10 @@ def build_pick(fixture, provider, market="over", odds=DEFAULT_ODDS, before=None,
     lam_h, lam_a = lambdas(home_ms, away_ms)
     from .rules import (away_sc_leak_path_passes,
                         home_sc_leak_path_passes,
-                        over_attack_leak_path_passes, over_path_passes,
-                        run_checks)
+                        over_attack_leak_path_passes, run_checks)
     checks = run_checks(home_ms, away_ms, market=market,
                         home_name=fixture["home"], away_name=fixture["away"],
                         lam_h=lam_h, lam_a=lam_a)
-    over_path_passed = (over_path_passes(home_ms, away_ms, checks)
-                        if market == "over" else True)
     over_directional_path = (market == "over"
                              and over_attack_leak_path_passes(checks))
     directional_path = (
@@ -113,9 +106,7 @@ def build_pick(fixture, provider, market="over", odds=DEFAULT_ODDS, before=None,
         or (market in ("home", "home_sc")
             and home_sc_leak_path_passes(checks))
         or (market == "away_sc" and away_sc_leak_path_passes(checks))
-        or (market == "btts"
-            and home_sc_leak_path_passes(checks)
-            and away_sc_leak_path_passes(checks)))
+        or (market == "btts" and checks["H6"] and checks["A3"]))
     required = list(REQUIRED_MARKET_CHECKS.get(market, ()))
     required_set = set(required)
     required_checks_passed = all(checks[k] for k in required)
@@ -127,12 +118,15 @@ def build_pick(fixture, provider, market="over", odds=DEFAULT_ODDS, before=None,
         sel = [m for m in ms if venue is None or m["venue"] == venue]
         return round(sum(m[key] for m in sel) / len(sel), 2) if sel else 0.0
 
+    home_points_pct = _points_pct([m for m in home_ms if m["venue"] == "H"][-6:])
+    away_points_pct = _points_pct([m for m in away_ms if m["venue"] == "A"][-6:])
+
     total = len(checks)
     check_ratio = round(passed / total, 3) if total else 0.0
     # Preserve the Over check-ratio blend even when the directional path
     # passes. The other scoring markets may use directional evidence as their
     # confidence basis, but that shortcut broadened Over 2.5 too aggressively.
-    relevant_ratio = (1.0 if directional_path and market != "over"
+    relevant_ratio = (1.0 if directional_path and market not in ("over", "btts")
                       else check_ratio)
     conf = min(0.98, p * (0.70 + 0.30 * relevant_ratio)) if total else 0.0
     conf = round(conf, 3)
@@ -147,8 +141,7 @@ def build_pick(fixture, provider, market="over", odds=DEFAULT_ODDS, before=None,
     lo, hi = xg_forecast(lam_h, lam_a)
 
     core = CORE_CHECKS.get(market, [])
-    missed = [f"{CHECK_NAMES[k]} (failed)" for k in core
-              if (not over_path_passed if k == "O_PATH" else not checks[k])]
+    missed = [f"{CHECK_NAMES[k]} (failed)" for k in core if not checks[k]]
 
     line_by_market = {"over": 2.5, "under": 2.5, "over15": 1.5,
                       "under35": 3.5, "btts": None, "no_btts": None,
@@ -163,11 +156,10 @@ def build_pick(fixture, provider, market="over", odds=DEFAULT_ODDS, before=None,
         "confidence": conf, "model_p": round(p, 3),
         "checks_passed": passed, "checks_total": total,
         "check_ratio": check_ratio,
-        "over_path_passed": over_path_passed,
         "over_directional_path_passed": over_directional_path,
         "directional_path_passed": directional_path,
         "confidence_basis": ("directional attack vs opposing leakage"
-                             if directional_path and market != "over"
+                             if directional_path and market not in ("over", "btts")
                              else "market probability blended with check ratio"),
         "required_checks_passed": required_checks_passed,
         "missed": missed, "ev": ev, "edge_pct": round(ev * 100, 1),
@@ -178,16 +170,17 @@ def build_pick(fixture, provider, market="over", odds=DEFAULT_ODDS, before=None,
         "home_gpg_all": gpg(home_ms), "away_gpg_all": gpg(away_ms),
         "home_concede_all": gpg(home_ms, None, "ga"),
         "away_concede_all": gpg(away_ms, None, "ga"),
+        "home_points_pct_at_home": (round(home_points_pct * 100, 1)
+                                     if home_points_pct is not None else None),
+        "away_points_pct_away": (round(away_points_pct * 100, 1)
+                                 if away_points_pct is not None else None),
     }
     if include_gate_audit:
         req_fail = [cid for cid in required if not checks.get(cid, False)]
         opt_fail = [cid for cid in core
-                    if cid not in required_set and cid != "O_PATH"
-                    and not checks.get(cid, False)]
+                    if cid not in required_set and not checks.get(cid, False)]
         out["audit_required_failed"] = req_fail
         out["audit_optional_failed"] = opt_fail
-        out["audit_over_path_failed"] = (market == "over"
-                                         and not over_path_passed)
         out["audit_all_checks"] = dict(checks)
     return out
 
@@ -288,7 +281,7 @@ def predict_day(provider, day=None, markets=("over",), odds=DEFAULT_ODDS,
                         "label": MARKET_LABEL.get(mkt, mkt),
                         "confidence": 0.0, "model_p": 0.0,
                         "checks_passed": 0, "checks_total": 0,
-                        "check_ratio": 0.0, "over_path_passed": False,
+                        "check_ratio": 0.0,
                         "over_directional_path_passed": False,
                         "directional_path_passed": False,
                         "required_checks_passed": False, "missed": [],
@@ -324,8 +317,6 @@ def predict_day(provider, day=None, markets=("over",), odds=DEFAULT_ODDS,
                                         + ", ".join(rf))
                 else:
                     gate_reasons.append("required checks failed")
-            if mkt == "over" and not p.get("over_path_passed", True):
-                gate_reasons.append("over_path check failed")
             if p["confidence"] < solid_thr:
                 gate_reasons.append(
                     "conf {:.3f} < gate {:.3f} ({})".format(

@@ -610,13 +610,9 @@ def cmd_backtest(args):
                   "home": r["home"], "away": r["away"]}
             for mkt in mkts:
                 p = build_pick(fx, prov, market=mkt, odds=args.odds, before=d)
-                # Match live prediction eligibility: a confidence score alone
-                # is not enough for markets with required evidence paths.
-                # In particular, Over must pass its attack-v-leakage/open-game
-                # path or the replay overstates the number of publishable picks.
+                # Match live prediction eligibility: venue-form requirements
+                # and confidence gates determine whether a pick is publishable.
                 if not p.get("required_checks_passed", False):
-                    continue
-                if mkt == "over" and not p.get("over_path_passed", False):
                     continue
                 if (is_international_tournament(r["league"])
                         and mkt in INTERNATIONAL_SKIP_MARKETS):

@@ -381,8 +381,8 @@ class TestRulesVenueOverall(unittest.TestCase):
         self.assertEqual(len(checks), 18)
         self.assertNotIn("H2H", checks)
         with_h2h = run_checks(home, home, market="over", home_name="A", away_name="B")
-        # Over 2.5 combines current attack/leakage evidence with Over25Tips votes.
-        self.assertEqual(len(with_h2h), 20)
+        # Over 2.5 uses current optional signals plus the two venue 4-of-6 gates.
+        self.assertEqual(len(with_h2h), 14)
         self.assertIn("H2H", with_h2h)
         # Attack⇄leakage pair signature: home_sc profile (H6/H7 ATT + A9/A12 LEAK)
         # and away_sc profile (A3/A8 ATT + H8/H12 LEAK) must ALL be present in over.
@@ -447,7 +447,7 @@ class TestNoLookahead(unittest.TestCase):
 
 
 class TestFourOfSixAndNegativeMarkets(unittest.TestCase):
-    def test_six_of_six_scoring_contract(self):
+    def test_btts_venue_scoring_contract(self):
         import importlib
         import tempfile
         os.environ["OU_DATA_DIR"] = tempfile.mkdtemp(prefix="ou_6of6_")
@@ -459,14 +459,14 @@ class TestFourOfSixAndNegativeMarkets(unittest.TestCase):
         from overunder.rules import run_checks as _rc
         try:
             regular = [M("H", 2, 1), M("A", 1, 0), M("H", 0, 1), M("A", 2, 2),
-                       M("H", 1, 1), M("A", 1, 0)]
+                       M("H", 1, 1), M("A", 1, 0), M("H", 0, 0), M("A", 0, 1),
+                       M("H", 1, 0), M("A", 2, 0), M("H", 0, 1), M("A", 1, 1)]
             c = _rc(regular, regular, market="btts", home_name="A", away_name="B")
             self.assertFalse(c["H7"])
             self.assertFalse(c["A13"])
             self.assertFalse(c["H6"])
             self.assertFalse(c["A9"])
-            perfect = [M("H", 2, 1), M("A", 1, 2), M("H", 1, 1), M("A", 2, 2),
-                       M("H", 3, 1), M("A", 1, 1)]
+            perfect = [M("H", 2, 1)] * 6 + [M("A", 1, 2)] * 6
             c2 = _rc(perfect, perfect, market="btts", home_name="A", away_name="B")
             self.assertTrue(c2["H6"] and c2["H7"] and c2["A3"] and c2["A13"])
         finally:
@@ -478,7 +478,7 @@ class TestFourOfSixAndNegativeMarkets(unittest.TestCase):
         weak = [M("H", 1, 0), M("H", 0, 1), M("H", 1, 0), M("A", 0, 0),
                 M("H", 0, 0), M("A", 1, 0)]
         c = run_checks(weak, weak, market="under", home_name="A", away_name="B")
-        self.assertEqual(len(c), 14)
+        self.assertEqual(len(c), 16)
         self.assertTrue(c["UH_BLK"] and c["UH_CS_O"] and c["UH_GA_L3"] and c["UH_UND_O"])
         self.assertTrue(c["UA_CS_O"] and c["UA_GA_L3"] and c["UA_UND_O"])
         strong = [M("H", 3, 1)] * 6
@@ -521,14 +521,14 @@ class TestHomeStabilityChecks(unittest.TestCase):
         weak_a   = [M("A", 0, 1), M("A", 1, 1), M("A", 0, 2), M("H", 0, 0),
                     M("A", 1, 2), M("H", 0, 1)]   # winless in all 6
         c = run_checks(strong_h, weak_a, market="home", home_name="A", away_name="B")
-        self.assertTrue(c["H14"] and c["H15"] and c["A16"])
+        self.assertTrue(c["HP50"] and c["HP_EDGE"] and c["AP_LT50"])
         # losing home team / winning away team must fail them
         shaky_h = [M("H", 0, 1), M("H", 0, 2), M("H", 1, 0), M("A", 0, 1),
                    M("H", 0, 1), M("A", 0, 0)]   # loses most games
         hot_a   = [M("A", 2, 0), M("A", 3, 1), M("A", 1, 0), M("H", 1, 0),
                    M("A", 2, 1), M("H", 0, 0)]   # wins most games
         c2 = run_checks(shaky_h, hot_a, market="home", home_name="A", away_name="B")
-        self.assertFalse(c2["H14"] or c2["A16"])
+        self.assertFalse(c2["HP50"] or c2["HP_EDGE"] or c2["AP_LT50"])
 
 
 class TestSaferMarkets(unittest.TestCase):
