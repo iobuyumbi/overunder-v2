@@ -269,9 +269,29 @@ def _freq_cat(cat, ms, fn):
 
 
 def _venue_4_of_6(ms, venue, predicate):
-    """Require 4+ qualifying results in the last six matches at this venue."""
-    recent = _last(ms, 6, venue)
-    return len(recent) == 6 and sum(1 for m in recent if predicate(m)) >= 4
+    """Venue-OR version: 4-of-6 venue-equivalent rate (~66.7%).
+
+    For teams with sparse venue splits (national teams, neutral-venue
+    tournaments, newly-promoted sides), fall back to overall L6 form via
+    _venue_or.  The 4/6 = 66.7% bar is then scaled PROPORTIONALLY to the
+    actual sample size (matching _strong_unbeaten):
+      6 matches -> 4+    5 matches -> 4+    4 matches -> 3+    3 matches -> 2+
+    This fixes international fixtures (England v Czech, Spain v Croatia)
+    where the home venue split has 0-2 matches but overall L6 form clearly
+    shows high-scoring or high-BTTS form."""
+    overall = _last(ms, 6)
+    recent_raw = _last(ms, 6, venue)
+    recent = _venue_or(recent_raw, overall, 3)
+    n = len(recent)
+    if n >= 6:
+        return sum(1 for m in recent if predicate(m)) >= 4
+    if n >= 5:
+        return sum(1 for m in recent if predicate(m)) >= 4
+    if n >= 4:
+        return sum(1 for m in recent if predicate(m)) >= 3
+    if n >= 3:
+        return sum(1 for m in recent if predicate(m)) >= 2
+    return False
 
 
 def _freq4(ms, fn):
@@ -527,18 +547,18 @@ def _no_btts_checks(home_ms, away_ms, lam_h, lam_a):
 
 def home_sc_leak_path_passes(checks):
     """Home scoring evidence paired with the away side's conceding record."""
-    home_attack = (checks["H6SO"] if "H6SO" in checks else
+    home_attack = (checks.get("H6SO", False) if "H6SO" in checks else
                    checks.get("H6", False) and checks.get("H7", False))
     return bool(home_attack
-                and checks["A9"] and checks["A12"])
+                and checks.get("A9", False) and checks.get("A12", False))
 
 
 def away_sc_leak_path_passes(checks):
     """Away scoring evidence paired with the home side's conceding record."""
-    away_attack = (checks["A6SO"] if "A6SO" in checks else
+    away_attack = (checks.get("A6SO", False) if "A6SO" in checks else
                    checks.get("A3", False) and checks.get("A13", checks.get("A8", False)))
     return bool(away_attack
-                and checks["H8"] and checks["H12"])
+                and checks.get("H8", False) and checks.get("H12", False))
 
 
 def over_attack_leak_path_passes(checks):
@@ -702,11 +722,13 @@ def run_checks(home_ms, away_ms, market=None, home_name="", away_name="",
             checks["O15_AV"] = _venue_4_of_6(
                 away_ms, "A", lambda m: _tot(m) > 1.5)
     elif market == "btts":
-        # btts = home_sc U away_sc -- the full union:
-        #   Each team's venue scoring rate is a hard 4-of-6 condition;
-        #   other evidence remains optional confidence support.
-        # Base checks already provide A9/A11 and H8/H10; we add the venue+overall
-        # conceded rates (A12/H12 via conceded category) and away overall score.
+        # btts = home_sc U away_sc -- full attack-leakage union, NOT just
+        # "each team scores at their own venue".  Required check alignment:
+        #   Scored side: H6 (home venue) AND A3 (away venue) via _venue_4_of_6
+        #   Leak side : H12 (home concedes overall) AND A12 (away concedes overall)
+        # This pairing guarantees: "home scores AND away concedes" AND "away scores
+        # AND home concedes" -- the structural preconditions for BTTS.  H6SO/A6SO
+        # (6/6 overall scorers) are kept as CORE-weighted strong signal, not required.
         checks.update({
             "H6": _venue_4_of_6(home_ms, "H", lambda m: m["gf"] > 0),
             "H7": _freq_cat("scored", h6, lambda m: m["gf"] > 0),
@@ -714,13 +736,22 @@ def run_checks(home_ms, away_ms, market=None, home_name="", away_name="",
             "A13": _freq_cat("scored", a6, lambda m: m["gf"] > 0),
             "A12": _freq_cat("conceded", a6, lambda m: m["ga"] > 0),
             "H12": _freq_cat("conceded", h6, lambda m: m["ga"] > 0),
+            "H6SO": len(h6) == 6 and all(m["gf"] > 0 for m in h6),
+            "A6SO": len(a6) == 6 and all(m["gf"] > 0 for m in a6),
         })
     elif market == "home":
         # Compare points-per-match at each team's venue rather than win counts.
-        hp = _points_pct(_last(home_ms, 6, "H"))
-        ap = _points_pct(_last(away_ms, 6, "A"))
+        # _venue_or fallback: national teams play <3 home/away venue matches
+        # in a calendar window; fall back to overall L6 so points-pct computes.
+        hp = _points_pct(_venue_or(_last(home_ms, 6, "H"), h6, 3))
+        ap = _points_pct(_venue_or(_last(away_ms, 6, "A"), a6, 3))
         checks.update({
             "A12": _freq_cat("conceded", a6, lambda m: m["ga"] > 0),
+            # Preserve the original home-win evidence alongside points form.
+            "H14": _strong_unbeaten(h6H),
+            "H15": _strong_unbeaten(h6),
+            "H16": _freq_cat("win", h6H, lambda m: m["gf"] > m["ga"]),
+            "A16": _freq_cat("nowin", a6A, lambda m: m["gf"] <= m["ga"]),
             "HP50": hp is not None and hp >= 0.50,
             "HP_EDGE": hp is not None and ap is not None and hp > ap,
             "HP_NOT_WORSE": hp is not None and ap is not None and hp >= ap,
@@ -745,10 +776,17 @@ def run_checks(home_ms, away_ms, market=None, home_name="", away_name="",
         })
     elif market == "home_dw":
         # For 1X, home points form can equal the away points form.
-        hp = _points_pct(_last(home_ms, 6, "H"))
-        ap = _points_pct(_last(away_ms, 6, "A"))
+        # _venue_or fallback for sparse venue data (national teams).
+        hp = _points_pct(_venue_or(_last(home_ms, 6, "H"), h6, 3))
+        ap = _points_pct(_venue_or(_last(away_ms, 6, "A"), a6, 3))
         checks.update({
             "A12": _freq_cat("conceded", a6, lambda m: m["ga"] > 0),
+            # Keep the previous unbeaten / away-no-win evidence as well as
+            # the newer venue points-form checks.
+            "H14": _strong_unbeaten(h6H),
+            "H15": _strong_unbeaten(h6),
+            "A14": _freq_cat("nowin", a6A, lambda m: m["gf"] <= m["ga"]),
+            "A15": _freq_cat("nowin", a6, lambda m: m["gf"] <= m["ga"]),
             "HP50": hp is not None and hp >= 0.50,
             "HP_EDGE": hp is not None and ap is not None and hp > ap,
             "HP_NOT_WORSE": hp is not None and ap is not None and hp >= ap,

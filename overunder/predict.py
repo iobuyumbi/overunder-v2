@@ -37,7 +37,7 @@ MARKET_LABEL = {"over": "Over 2.5", "under": "Under 2.5", "btts": "BTTS",
 # Negative markets (under/under35/no_btts) use INDEPENDENT check IDs with
 # semantic prefixes UH_/UA_/U35_/NH_/NA_/NB_ (not u/n suffix mirrors).
 CORE_CHECKS = {
-    "over":    ["H1", "A1", "H2", "A4", "H2R", "A4R", "H6", "H7", "A9", "A12",
+    "over":    ["H2", "A4", "H2R", "A4R", "H6", "H7", "A9", "A12",
                 "A3", "A8", "H8", "H12",
                 "H3", "A5", "H2H"],
     "under":   ["UH_UND", "UA_UND", "UH_BLK", "UH_CS", "UH_BLK_O", "UH_CS_O",
@@ -46,14 +46,15 @@ CORE_CHECKS = {
                 "UA_GA_L3",
                 "UH_UND_O", "UA_UND_O",
                 "H2H"],
-    "btts":    ["H1", "A1", "H6", "A3", "H7", "A9", "A12",
-                "A13", "H8", "H12", "H2H"],
+    "btts":    ["H6", "A3", "H7", "A13", "H6SO", "A6SO", "A9", "A12",
+                "H8", "H12", "H2H"],
     "no_btts": ["NH_BL", "NH_BL_OWN", "NH_BL_O",
                 "NA_BL", "NA_BL_OWN", "NA_BL_O",
                 "NH_BTTS_O", "NA_BTTS_O",
                 "NB_BOTH", "NB_LAM",
                 "H2H"],
-    "home":    ["HP50", "HP_EDGE", "AP_LT50", "H2H"],
+    "home":    ["H6", "H7", "A9", "A12", "H14", "A16", "H16",
+                "HP50", "HP_EDGE", "AP_LT50", "H2H"],
     "home_sc": ["H1", "H6SO", "S6", "A9", "A12", "H2H"],
     "away_sc": ["A1", "A6SO", "S6", "H8", "H12", "H2H"],
     "over15":  ["H1", "A1", "H2R", "A4R", "O15_HV", "O15_AV", "H6", "A9", "A12",
@@ -64,7 +65,8 @@ CORE_CHECKS = {
                 "U35_NOHI", "U35_NOAI", "U35_NOHI_O", "U35_NOAI_O",
                 "UH_UND", "UA_UND", "UH_UND_O", "UA_UND_O",
                 "H2H"],
-    "home_dw": ["HP50", "HP_NOT_WORSE", "AP_LT50", "H2H"],
+    "home_dw": ["H6", "H7", "A9", "A12", "H14", "H15", "A14", "A15",
+                "A17", "A18", "HP50", "HP_NOT_WORSE", "AP_LT50", "H2H"],
 }
 
 # These scored/conceded patterns are eligibility requirements, not soft votes
@@ -73,11 +75,12 @@ REQUIRED_MARKET_CHECKS = {
     "over": ("H2", "A4"),
     "over15": ("O15_HV", "O15_AV"),
     "under": ("UH_UND", "UA_UND"),
-    "home": ("HP50", "HP_EDGE"),
-    "home_dw": ("HP50", "HP_NOT_WORSE"),
+    "home": ("H6", "H7", "A9", "A12", "HP50", "HP_EDGE", "AP_LT50"),
+    "home_dw": ("H6", "H7", "A9", "A12", "H14", "A14",
+                "HP50", "HP_NOT_WORSE", "AP_LT50"),
     "home_sc": ("H6SO", "A9", "A12"),
     "away_sc": ("A6SO", "H8", "H12"),
-    "btts": ("H6", "A3"),
+    "btts": ("H6", "A3", "H12", "A12"),
 }
 
 
@@ -118,22 +121,27 @@ def build_pick(fixture, provider, market="over", odds=DEFAULT_ODDS, before=None,
         sel = [m for m in ms if venue is None or m["venue"] == venue]
         return round(sum(m[key] for m in sel) / len(sel), 2) if sel else 0.0
 
-    home_points_pct = _points_pct([m for m in home_ms if m["venue"] == "H"][-6:])
-    away_points_pct = _points_pct([m for m in away_ms if m["venue"] == "A"][-6:])
+    from .rules import _last as _r_last, _venue_or as _r_venue_or
+    _hp_venue = [m for m in home_ms if m["venue"] == "H"][-6:]
+    _hp_overall = _r_last(home_ms, 6)
+    _ap_venue = [m for m in away_ms if m["venue"] == "A"][-6:]
+    _ap_overall = _r_last(away_ms, 6)
+    home_points_pct = _points_pct(_r_venue_or(_hp_venue, _hp_overall, 3))
+    away_points_pct = _points_pct(_r_venue_or(_ap_venue, _ap_overall, 3))
 
     total = len(checks)
     check_ratio = round(passed / total, 3) if total else 0.0
-    # Preserve the Over check-ratio blend even when the directional path
-    # passes. The other scoring markets may use directional evidence as their
-    # confidence basis, but that shortcut broadened Over 2.5 too aggressively.
-    relevant_ratio = (1.0 if directional_path and market not in ("over", "btts")
-                      else check_ratio)
-    conf = min(0.98, p * (0.70 + 0.30 * relevant_ratio)) if total else 0.0
-    conf = round(conf, 3)
-    if isinstance(odds, dict):
-        odds_v = float(odds.get(market, DEFAULT_ODDS))
+    if directional_path and market not in ("over", "btts"):
+        adj_ratio = min(0.95, check_ratio + 0.20)
     else:
-        odds_v = float(odds)
+        adj_ratio = check_ratio
+    conf = min(0.98, p * (0.62 + 0.38 * adj_ratio)) if total else 0.0
+    conf = round(conf, 3)
+    _odds = odds if odds is not None else DEFAULT_ODDS
+    if isinstance(_odds, dict):
+        odds_v = float(_odds.get(market, DEFAULT_ODDS))
+    else:
+        odds_v = float(_odds)
     ev = round(conf * (odds_v - 1) - (1 - conf), 3)
     stake = 0.0 if ev <= 0 else round(min(MAX_STAKE_PCT, ev * KELLY_FRACTION), 1)
     tier_bar = MARKET_PREMIUM.get(market, PREMIUM_TIER)
@@ -141,7 +149,8 @@ def build_pick(fixture, provider, market="over", odds=DEFAULT_ODDS, before=None,
     lo, hi = xg_forecast(lam_h, lam_a)
 
     core = CORE_CHECKS.get(market, [])
-    missed = [f"{CHECK_NAMES[k]} (failed)" for k in core if not checks[k]]
+    missed = [f"{CHECK_NAMES[k]} (failed)" for k in core
+              if k in checks and not checks[k]]
 
     line_by_market = {"over": 2.5, "under": 2.5, "over15": 1.5,
                       "under35": 3.5, "btts": None, "no_btts": None,
@@ -287,7 +296,8 @@ def predict_day(provider, day=None, markets=("over",), odds=DEFAULT_ODDS,
                         "required_checks_passed": False, "missed": [],
                         "ev": 0.0, "edge_pct": 0.0, "stake_pct": 0.0,
                         "odds": (float(odds.get(mkt, DEFAULT_ODDS))
-                                 if isinstance(odds, dict) else float(odds)),
+                                 if isinstance(odds, dict) else
+                                 float(odds if odds is not None else DEFAULT_ODDS)),
                         "tier": "build_pick error", "xg": [0.0, 0.0],
                         "home_attack": 0, "home_concede": 0,
                         "away_attack": 0, "away_concede": 0,
