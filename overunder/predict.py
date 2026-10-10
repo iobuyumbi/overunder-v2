@@ -80,7 +80,8 @@ REQUIRED_MARKET_CHECKS = {
                 "HP50", "HP_NOT_WORSE", "AP_LT50"),
     "home_sc": ("H6SO", "A9", "A12"),
     "away_sc": ("A6SO", "H8", "H12"),
-    "btts": ("H6", "A3", "H12", "A12"),
+    # BTTS is eligible only when both team-to-score paths pass together.
+    "btts": ("H6SO", "A9", "A12", "A6SO", "H8", "H12"),
 }
 
 
@@ -109,7 +110,9 @@ def build_pick(fixture, provider, market="over", odds=DEFAULT_ODDS, before=None,
         or (market in ("home", "home_sc")
             and home_sc_leak_path_passes(checks))
         or (market == "away_sc" and away_sc_leak_path_passes(checks))
-        or (market == "btts" and checks["H6"] and checks["A3"]))
+        or (market == "btts"
+            and home_sc_leak_path_passes(checks)
+            and away_sc_leak_path_passes(checks)))
     required = list(REQUIRED_MARKET_CHECKS.get(market, ()))
     required_set = set(required)
     required_checks_passed = all(checks[k] for k in required)

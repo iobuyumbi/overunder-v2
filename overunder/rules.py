@@ -13,7 +13,7 @@ Key relationships (enforced via _EXCLUDE and the btts override block):
            + HOME defence LEAKAGE (H8 home-venue, H12 overall, conceded cat)
            + L3 volume confirmations (A1 away GF, H10 home GA)
 
-  btts     = each team scored in 4 of its last 6 matches at its own venue.
+  btts     = both complete home_sc AND away_sc attack/leakage paths pass.
 
   over     -- each team's 4-of-6 venue match totals must exceed 2.5.
   over15   -- each team's 4-of-6 venue match totals must exceed 1.5.
@@ -722,13 +722,11 @@ def run_checks(home_ms, away_ms, market=None, home_name="", away_name="",
             checks["O15_AV"] = _venue_4_of_6(
                 away_ms, "A", lambda m: _tot(m) > 1.5)
     elif market == "btts":
-        # btts = home_sc U away_sc -- full attack-leakage union, NOT just
-        # "each team scores at their own venue".  Required check alignment:
-        #   Scored side: H6 (home venue) AND A3 (away venue) via _venue_4_of_6
-        #   Leak side : H12 (home concedes overall) AND A12 (away concedes overall)
-        # This pairing guarantees: "home scores AND away concedes" AND "away scores
-        # AND home concedes" -- the structural preconditions for BTTS.  H6SO/A6SO
-        # (6/6 overall scorers) are kept as CORE-weighted strong signal, not required.
+        # BTTS is the intersection of the two team-to-score markets:
+        #   home_sc: H6SO (6/6 overall) + A9/A12 (away concedes venue+overall)
+        #   away_sc: A6SO (6/6 overall) + H8/H12 (home concedes venue+overall)
+        # Venue scoring rates remain optional supporting evidence, not extra
+        # requirements beyond both directional score paths.
         checks.update({
             "H6": _venue_4_of_6(home_ms, "H", lambda m: m["gf"] > 0),
             "H7": _freq_cat("scored", h6, lambda m: m["gf"] > 0),
