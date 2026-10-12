@@ -1,5 +1,5 @@
 {
-  "computed_at": "2026-10-05 09:53:39",
+  "computed_at": "2026-10-12 10:05:14",
   "window_days": 30,
   "min_picks": 6,
   "leagues": {
@@ -10,14 +10,20 @@
         "l": 1,
         "profit": 0.3,
         "win_pct": 66.7,
+        "baseline": 72.0,
+        "dev_pct": -5.3,
+        "caution_reasons": [],
         "caution": false
       },
       "home_dw": {
-        "n": 1,
-        "w": 1,
+        "n": 4,
+        "w": 4,
         "l": 0,
-        "profit": 0.3,
+        "profit": 1.2,
         "win_pct": 100.0,
+        "baseline": 88.0,
+        "dev_pct": 12.0,
+        "caution_reasons": [],
         "caution": false
       }
     },
@@ -28,6 +34,9 @@
         "l": 1,
         "profit": -0.3,
         "win_pct": 0.0,
+        "baseline": 72.0,
+        "dev_pct": -72.0,
+        "caution_reasons": [],
         "caution": false
       },
       "home_sc": {
@@ -36,16 +45,42 @@
         "l": 0,
         "profit": 0.3,
         "win_pct": 100.0,
+        "baseline": 85.0,
+        "dev_pct": 15.0,
+        "caution_reasons": [],
         "caution": false
-      }
-    },
-    "nations league": {
-      "home": {
+      },
+      "away_sc": {
         "n": 1,
         "w": 1,
         "l": 0,
         "profit": 0.3,
         "win_pct": 100.0,
+        "baseline": 83.0,
+        "dev_pct": 17.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "over": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 72.0,
+        "dev_pct": 28.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "over15": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 90.0,
+        "dev_pct": 10.0,
+        "caution_reasons": [],
         "caution": false
       },
       "home_dw": {
@@ -54,6 +89,103 @@
         "l": 0,
         "profit": 0.3,
         "win_pct": 100.0,
+        "baseline": 88.0,
+        "dev_pct": 12.0,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "nations league": {
+      "home": {
+        "n": 2,
+        "w": 2,
+        "l": 0,
+        "profit": 0.6,
+        "win_pct": 100.0,
+        "baseline": 62.0,
+        "dev_pct": 38.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home_dw": {
+        "n": 2,
+        "w": 2,
+        "l": 0,
+        "profit": 0.6,
+        "win_pct": 100.0,
+        "baseline": 88.0,
+        "dev_pct": 12.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home_sc": {
+        "n": 4,
+        "w": 2,
+        "l": 2,
+        "profit": 0.0,
+        "win_pct": 50.0,
+        "baseline": 85.0,
+        "dev_pct": -35.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "away_sc": {
+        "n": 3,
+        "w": 1,
+        "l": 2,
+        "profit": -0.3,
+        "win_pct": 33.3,
+        "baseline": 83.0,
+        "dev_pct": -49.7,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "over": {
+        "n": 4,
+        "w": 2,
+        "l": 2,
+        "profit": -0.3,
+        "win_pct": 50.0,
+        "baseline": 72.0,
+        "dev_pct": -22.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "over15": {
+        "n": 1,
+        "w": 0,
+        "l": 1,
+        "profit": -0.3,
+        "win_pct": 0.0,
+        "baseline": 90.0,
+        "dev_pct": -90.0,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "northern irish premier league": {
+      "away_sc": {
+        "n": 3,
+        "w": 2,
+        "l": 1,
+        "profit": 0.3,
+        "win_pct": 66.7,
+        "baseline": 83.0,
+        "dev_pct": -16.3,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "liga prof argentina torneo": {
+      "away_sc": {
+        "n": 2,
+        "w": 2,
+        "l": 0,
+        "profit": 0.4,
+        "win_pct": 100.0,
+        "baseline": 83.0,
+        "dev_pct": 17.0,
+        "caution_reasons": [],
         "caution": false
       },
       "home_sc": {
@@ -62,34 +194,9 @@
         "l": 0,
         "profit": 0.3,
         "win_pct": 100.0,
-        "caution": false
-      },
-      "away_sc": {
-        "n": 1,
-        "w": 0,
-        "l": 1,
-        "profit": -0.3,
-        "win_pct": 0.0,
-        "caution": false
-      }
-    },
-    "northern irish premier league": {
-      "away_sc": {
-        "n": 1,
-        "w": 1,
-        "l": 0,
-        "profit": 0.3,
-        "win_pct": 100.0,
-        "caution": false
-      }
-    },
-    "liga prof argentina torneo": {
-      "away_sc": {
-        "n": 1,
-        "w": 1,
-        "l": 0,
-        "profit": 0.2,
-        "win_pct": 100.0,
+        "baseline": 85.0,
+        "dev_pct": 15.0,
+        "caution_reasons": [],
         "caution": false
       }
     },
@@ -100,6 +207,20 @@
         "l": 0,
         "profit": 0.3,
         "win_pct": 100.0,
+        "baseline": 72.0,
+        "dev_pct": 28.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home_sc": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 85.0,
+        "dev_pct": 15.0,
+        "caution_reasons": [],
         "caution": false
       }
     },
@@ -110,6 +231,1941 @@
         "l": 0,
         "profit": 0.3,
         "win_pct": 100.0,
+        "baseline": 85.0,
+        "dev_pct": 15.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "away_sc": {
+        "n": 3,
+        "w": 2,
+        "l": 1,
+        "profit": 0.3,
+        "win_pct": 66.7,
+        "baseline": 83.0,
+        "dev_pct": -16.3,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home_dw": {
+        "n": 3,
+        "w": 1,
+        "l": 2,
+        "profit": -0.3,
+        "win_pct": 33.3,
+        "baseline": 88.0,
+        "dev_pct": -54.7,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home": {
+        "n": 1,
+        "w": 0,
+        "l": 1,
+        "profit": -0.3,
+        "win_pct": 0.0,
+        "baseline": 62.0,
+        "dev_pct": -62.0,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "ryman premier": {
+      "over": {
+        "n": 3,
+        "w": 2,
+        "l": 1,
+        "profit": 0.1,
+        "win_pct": 66.7,
+        "baseline": 72.0,
+        "dev_pct": -5.3,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "over15": {
+        "n": 3,
+        "w": 2,
+        "l": 1,
+        "profit": 0.3,
+        "win_pct": 66.7,
+        "baseline": 90.0,
+        "dev_pct": -23.3,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "away_sc": {
+        "n": 4,
+        "w": 3,
+        "l": 1,
+        "profit": 0.7,
+        "win_pct": 75.0,
+        "baseline": 83.0,
+        "dev_pct": -8.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home_sc": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 85.0,
+        "dev_pct": 15.0,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "football league trophy": {
+      "over": {
+        "n": 3,
+        "w": 2,
+        "l": 1,
+        "profit": 0.2,
+        "win_pct": 66.7,
+        "baseline": 72.0,
+        "dev_pct": -5.3,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "over15": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 90.0,
+        "dev_pct": 10.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home_sc": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 85.0,
+        "dev_pct": 15.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "away_sc": {
+        "n": 5,
+        "w": 4,
+        "l": 1,
+        "profit": 0.8,
+        "win_pct": 80.0,
+        "baseline": 83.0,
+        "dev_pct": -3.0,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "unibond premier": {
+      "over": {
+        "n": 8,
+        "w": 6,
+        "l": 2,
+        "profit": 0.9,
+        "win_pct": 75.0,
+        "baseline": 72.0,
+        "dev_pct": 3.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "over15": {
+        "n": 6,
+        "w": 4,
+        "l": 2,
+        "profit": 0.6,
+        "win_pct": 66.7,
+        "baseline": 90.0,
+        "dev_pct": -23.3,
+        "caution_reasons": [
+          "win-rate deviates 23.3pp below our  90.0% target for over15 (actual 66.7%) -- doesn't go with our picks well"
+        ],
+        "caution": true
+      },
+      "home_dw": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 88.0,
+        "dev_pct": 12.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home_sc": {
+        "n": 6,
+        "w": 6,
+        "l": 0,
+        "profit": 1.8,
+        "win_pct": 100.0,
+        "baseline": 85.0,
+        "dev_pct": 15.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "away_sc": {
+        "n": 6,
+        "w": 4,
+        "l": 2,
+        "profit": 0.6,
+        "win_pct": 66.7,
+        "baseline": 83.0,
+        "dev_pct": -16.3,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 62.0,
+        "dev_pct": 38.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "btts": {
+        "n": 3,
+        "w": 1,
+        "l": 2,
+        "profit": -0.2,
+        "win_pct": 33.3,
+        "baseline": 65.0,
+        "dev_pct": -31.7,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "football conference south": {
+      "home_sc": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 85.0,
+        "dev_pct": 15.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "over": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.2,
+        "win_pct": 100.0,
+        "baseline": 72.0,
+        "dev_pct": 28.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "away_sc": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 83.0,
+        "dev_pct": 17.0,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "paraguay league clausura": {
+      "home_sc": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 85.0,
+        "dev_pct": 15.0,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "scottish highland league": {
+      "over": {
+        "n": 7,
+        "w": 5,
+        "l": 2,
+        "profit": 0.9,
+        "win_pct": 71.4,
+        "baseline": 72.0,
+        "dev_pct": -0.6,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "over15": {
+        "n": 4,
+        "w": 2,
+        "l": 2,
+        "profit": 0.0,
+        "win_pct": 50.0,
+        "baseline": 90.0,
+        "dev_pct": -40.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home_dw": {
+        "n": 3,
+        "w": 3,
+        "l": 0,
+        "profit": 0.9,
+        "win_pct": 100.0,
+        "baseline": 88.0,
+        "dev_pct": 12.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home_sc": {
+        "n": 6,
+        "w": 6,
+        "l": 0,
+        "profit": 1.8,
+        "win_pct": 100.0,
+        "baseline": 85.0,
+        "dev_pct": 15.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "away_sc": {
+        "n": 3,
+        "w": 3,
+        "l": 0,
+        "profit": 0.8,
+        "win_pct": 100.0,
+        "baseline": 83.0,
+        "dev_pct": 17.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "btts": {
+        "n": 1,
+        "w": 0,
+        "l": 1,
+        "profit": -0.2,
+        "win_pct": 0.0,
+        "baseline": 65.0,
+        "dev_pct": -65.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home": {
+        "n": 2,
+        "w": 2,
+        "l": 0,
+        "profit": 0.6,
+        "win_pct": 100.0,
+        "baseline": 62.0,
+        "dev_pct": 38.0,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "mls": {
+      "away_sc": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 83.0,
+        "dev_pct": 17.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home_dw": {
+        "n": 2,
+        "w": 2,
+        "l": 0,
+        "profit": 0.6,
+        "win_pct": 100.0,
+        "baseline": 88.0,
+        "dev_pct": 12.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "over15": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 90.0,
+        "dev_pct": 10.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home_sc": {
+        "n": 3,
+        "w": 3,
+        "l": 0,
+        "profit": 0.9,
+        "win_pct": 100.0,
+        "baseline": 85.0,
+        "dev_pct": 15.0,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "southern league premier": {
+      "away_sc": {
+        "n": 2,
+        "w": 2,
+        "l": 0,
+        "profit": 0.5,
+        "win_pct": 100.0,
+        "baseline": 83.0,
+        "dev_pct": 17.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home_dw": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 88.0,
+        "dev_pct": 12.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home_sc": {
+        "n": 2,
+        "w": 2,
+        "l": 0,
+        "profit": 0.6,
+        "win_pct": 100.0,
+        "baseline": 85.0,
+        "dev_pct": 15.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "over": {
+        "n": 2,
+        "w": 1,
+        "l": 1,
+        "profit": 0.0,
+        "win_pct": 50.0,
+        "baseline": 72.0,
+        "dev_pct": -22.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "over15": {
+        "n": 3,
+        "w": 2,
+        "l": 1,
+        "profit": 0.3,
+        "win_pct": 66.7,
+        "baseline": 90.0,
+        "dev_pct": -23.3,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "peru liga 1 clausura": {
+      "home": {
+        "n": 1,
+        "w": 0,
+        "l": 1,
+        "profit": -0.3,
+        "win_pct": 0.0,
+        "baseline": 62.0,
+        "dev_pct": -62.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home_dw": {
+        "n": 2,
+        "w": 1,
+        "l": 1,
+        "profit": 0.0,
+        "win_pct": 50.0,
+        "baseline": 88.0,
+        "dev_pct": -38.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home_sc": {
+        "n": 2,
+        "w": 1,
+        "l": 1,
+        "profit": 0.0,
+        "win_pct": 50.0,
+        "baseline": 85.0,
+        "dev_pct": -35.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "away_sc": {
+        "n": 2,
+        "w": 1,
+        "l": 1,
+        "profit": 0.0,
+        "win_pct": 50.0,
+        "baseline": 83.0,
+        "dev_pct": -33.0,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "peru liga 1 acumulada": {
+      "home": {
+        "n": 1,
+        "w": 0,
+        "l": 1,
+        "profit": -0.3,
+        "win_pct": 0.0,
+        "baseline": 62.0,
+        "dev_pct": -62.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home_dw": {
+        "n": 2,
+        "w": 1,
+        "l": 1,
+        "profit": 0.0,
+        "win_pct": 50.0,
+        "baseline": 88.0,
+        "dev_pct": -38.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home_sc": {
+        "n": 2,
+        "w": 1,
+        "l": 1,
+        "profit": 0.0,
+        "win_pct": 50.0,
+        "baseline": 85.0,
+        "dev_pct": -35.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "away_sc": {
+        "n": 2,
+        "w": 1,
+        "l": 1,
+        "profit": 0.0,
+        "win_pct": 50.0,
+        "baseline": 83.0,
+        "dev_pct": -33.0,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "romanian liga 1": {
+      "home_sc": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 85.0,
+        "dev_pct": 15.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 62.0,
+        "dev_pct": 38.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home_dw": {
+        "n": 2,
+        "w": 2,
+        "l": 0,
+        "profit": 0.6,
+        "win_pct": 100.0,
+        "baseline": 88.0,
+        "dev_pct": 12.0,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "brazilian serie a": {
+      "away_sc": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 83.0,
+        "dev_pct": 17.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home_dw": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 88.0,
+        "dev_pct": 12.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home_sc": {
+        "n": 2,
+        "w": 2,
+        "l": 0,
+        "profit": 0.6,
+        "win_pct": 100.0,
+        "baseline": 85.0,
+        "dev_pct": 15.0,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "league of ireland div 1": {
+      "over": {
+        "n": 2,
+        "w": 0,
+        "l": 2,
+        "profit": -0.6,
+        "win_pct": 0.0,
+        "baseline": 72.0,
+        "dev_pct": -72.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "over15": {
+        "n": 2,
+        "w": 2,
+        "l": 0,
+        "profit": 0.6,
+        "win_pct": 100.0,
+        "baseline": 90.0,
+        "dev_pct": 10.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "btts": {
+        "n": 2,
+        "w": 1,
+        "l": 1,
+        "profit": 0.0,
+        "win_pct": 50.0,
+        "baseline": 65.0,
+        "dev_pct": -15.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home_sc": {
+        "n": 3,
+        "w": 3,
+        "l": 0,
+        "profit": 0.9,
+        "win_pct": 100.0,
+        "baseline": 85.0,
+        "dev_pct": 15.0,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "norwegian tippeligaen": {
+      "over15": {
+        "n": 2,
+        "w": 2,
+        "l": 0,
+        "profit": 0.6,
+        "win_pct": 100.0,
+        "baseline": 90.0,
+        "dev_pct": 10.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "btts": {
+        "n": 1,
+        "w": 0,
+        "l": 1,
+        "profit": -0.2,
+        "win_pct": 0.0,
+        "baseline": 65.0,
+        "dev_pct": -65.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "away_sc": {
+        "n": 2,
+        "w": 2,
+        "l": 0,
+        "profit": 0.6,
+        "win_pct": 100.0,
+        "baseline": 83.0,
+        "dev_pct": 17.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 62.0,
+        "dev_pct": 38.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home_dw": {
+        "n": 2,
+        "w": 2,
+        "l": 0,
+        "profit": 0.6,
+        "win_pct": 100.0,
+        "baseline": 88.0,
+        "dev_pct": 12.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home_sc": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 85.0,
+        "dev_pct": 15.0,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "welsh premier": {
+      "home": {
+        "n": 1,
+        "w": 0,
+        "l": 1,
+        "profit": -0.3,
+        "win_pct": 0.0,
+        "baseline": 62.0,
+        "dev_pct": -62.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home_dw": {
+        "n": 1,
+        "w": 0,
+        "l": 1,
+        "profit": -0.3,
+        "win_pct": 0.0,
+        "baseline": 88.0,
+        "dev_pct": -88.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "away_sc": {
+        "n": 2,
+        "w": 2,
+        "l": 0,
+        "profit": 0.6,
+        "win_pct": 100.0,
+        "baseline": 83.0,
+        "dev_pct": 17.0,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "belgium league": {
+      "home_dw": {
+        "n": 3,
+        "w": 2,
+        "l": 1,
+        "profit": 0.3,
+        "win_pct": 66.7,
+        "baseline": 88.0,
+        "dev_pct": -21.3,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home": {
+        "n": 2,
+        "w": 1,
+        "l": 1,
+        "profit": 0.0,
+        "win_pct": 50.0,
+        "baseline": 62.0,
+        "dev_pct": -12.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "away_sc": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.2,
+        "win_pct": 100.0,
+        "baseline": 83.0,
+        "dev_pct": 17.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "over": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 72.0,
+        "dev_pct": 28.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "over15": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 90.0,
+        "dev_pct": 10.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home_sc": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 85.0,
+        "dev_pct": 15.0,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "german bundesliga": {
+      "home_sc": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 85.0,
+        "dev_pct": 15.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "away_sc": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 83.0,
+        "dev_pct": 17.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "over": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 72.0,
+        "dev_pct": 28.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "over15": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 90.0,
+        "dev_pct": 10.0,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "netherlands league": {
+      "home_sc": {
+        "n": 3,
+        "w": 3,
+        "l": 0,
+        "profit": 0.9,
+        "win_pct": 100.0,
+        "baseline": 85.0,
+        "dev_pct": 15.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "over15": {
+        "n": 4,
+        "w": 4,
+        "l": 0,
+        "profit": 1.2,
+        "win_pct": 100.0,
+        "baseline": 90.0,
+        "dev_pct": 10.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "away_sc": {
+        "n": 3,
+        "w": 3,
+        "l": 0,
+        "profit": 0.9,
+        "win_pct": 100.0,
+        "baseline": 83.0,
+        "dev_pct": 17.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "over": {
+        "n": 4,
+        "w": 3,
+        "l": 1,
+        "profit": 0.6,
+        "win_pct": 75.0,
+        "baseline": 72.0,
+        "dev_pct": 3.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "btts": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.2,
+        "win_pct": 100.0,
+        "baseline": 65.0,
+        "dev_pct": 35.0,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "czech liga": {
+      "away_sc": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 83.0,
+        "dev_pct": 17.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home_dw": {
+        "n": 2,
+        "w": 1,
+        "l": 1,
+        "profit": 0.0,
+        "win_pct": 50.0,
+        "baseline": 88.0,
+        "dev_pct": -38.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "over": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 72.0,
+        "dev_pct": 28.0,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "belarus league": {
+      "away_sc": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 83.0,
+        "dev_pct": 17.0,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "national league": {
+      "away_sc": {
+        "n": 4,
+        "w": 4,
+        "l": 0,
+        "profit": 1.0,
+        "win_pct": 100.0,
+        "baseline": 83.0,
+        "dev_pct": 17.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 62.0,
+        "dev_pct": 38.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home_dw": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 88.0,
+        "dev_pct": 12.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home_sc": {
+        "n": 4,
+        "w": 4,
+        "l": 0,
+        "profit": 1.2,
+        "win_pct": 100.0,
+        "baseline": 85.0,
+        "dev_pct": 15.0,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "football league one": {
+      "over15": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 90.0,
+        "dev_pct": 10.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "btts": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 65.0,
+        "dev_pct": 35.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home_sc": {
+        "n": 2,
+        "w": 2,
+        "l": 0,
+        "profit": 0.6,
+        "win_pct": 100.0,
+        "baseline": 85.0,
+        "dev_pct": 15.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "away_sc": {
+        "n": 1,
+        "w": 0,
+        "l": 1,
+        "profit": -0.2,
+        "win_pct": 0.0,
+        "baseline": 83.0,
+        "dev_pct": -83.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "over": {
+        "n": 3,
+        "w": 3,
+        "l": 0,
+        "profit": 0.9,
+        "win_pct": 100.0,
+        "baseline": 72.0,
+        "dev_pct": 28.0,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "spanish la liga": {
+      "home": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 62.0,
+        "dev_pct": 38.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home_dw": {
+        "n": 3,
+        "w": 3,
+        "l": 0,
+        "profit": 0.9,
+        "win_pct": 100.0,
+        "baseline": 88.0,
+        "dev_pct": 12.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home_sc": {
+        "n": 2,
+        "w": 2,
+        "l": 0,
+        "profit": 0.6,
+        "win_pct": 100.0,
+        "baseline": 85.0,
+        "dev_pct": 15.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "over15": {
+        "n": 1,
+        "w": 0,
+        "l": 1,
+        "profit": -0.3,
+        "win_pct": 0.0,
+        "baseline": 90.0,
+        "dev_pct": -90.0,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "premier league": {
+      "home": {
+        "n": 1,
+        "w": 0,
+        "l": 1,
+        "profit": -0.3,
+        "win_pct": 0.0,
+        "baseline": 62.0,
+        "dev_pct": -62.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home_dw": {
+        "n": 2,
+        "w": 2,
+        "l": 0,
+        "profit": 0.6,
+        "win_pct": 100.0,
+        "baseline": 88.0,
+        "dev_pct": 12.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "away_sc": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 83.0,
+        "dev_pct": 17.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "over": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 72.0,
+        "dev_pct": 28.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "over15": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 90.0,
+        "dev_pct": 10.0,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "swiss super league": {
+      "home": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 62.0,
+        "dev_pct": 38.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home_dw": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 88.0,
+        "dev_pct": 12.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home_sc": {
+        "n": 3,
+        "w": 3,
+        "l": 0,
+        "profit": 0.9,
+        "win_pct": 100.0,
+        "baseline": 85.0,
+        "dev_pct": 15.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "away_sc": {
+        "n": 3,
+        "w": 1,
+        "l": 2,
+        "profit": -0.3,
+        "win_pct": 33.3,
+        "baseline": 83.0,
+        "dev_pct": -49.7,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "over": {
+        "n": 3,
+        "w": 2,
+        "l": 1,
+        "profit": 0.3,
+        "win_pct": 66.7,
+        "baseline": 72.0,
+        "dev_pct": -5.3,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "over15": {
+        "n": 3,
+        "w": 3,
+        "l": 0,
+        "profit": 0.9,
+        "win_pct": 100.0,
+        "baseline": 90.0,
+        "dev_pct": 10.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "btts": {
+        "n": 2,
+        "w": 0,
+        "l": 2,
+        "profit": -0.5,
+        "win_pct": 0.0,
+        "baseline": 65.0,
+        "dev_pct": -65.0,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "japanese j2 league": {
+      "home_dw": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 88.0,
+        "dev_pct": 12.0,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "football conference north": {
+      "home_dw": {
+        "n": 1,
+        "w": 0,
+        "l": 1,
+        "profit": -0.3,
+        "win_pct": 0.0,
+        "baseline": 88.0,
+        "dev_pct": -88.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home_sc": {
+        "n": 2,
+        "w": 1,
+        "l": 1,
+        "profit": 0.0,
+        "win_pct": 50.0,
+        "baseline": 85.0,
+        "dev_pct": -35.0,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "football league two": {
+      "home_dw": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 88.0,
+        "dev_pct": 12.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "away_sc": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 83.0,
+        "dev_pct": 17.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "over15": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 90.0,
+        "dev_pct": 10.0,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "croatian hnl": {
+      "home_dw": {
+        "n": 1,
+        "w": 0,
+        "l": 1,
+        "profit": -0.3,
+        "win_pct": 0.0,
+        "baseline": 88.0,
+        "dev_pct": -88.0,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "hungarian league": {
+      "home_dw": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 88.0,
+        "dev_pct": 12.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home_sc": {
+        "n": 3,
+        "w": 3,
+        "l": 0,
+        "profit": 0.9,
+        "win_pct": 100.0,
+        "baseline": 85.0,
+        "dev_pct": 15.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "away_sc": {
+        "n": 1,
+        "w": 0,
+        "l": 1,
+        "profit": -0.3,
+        "win_pct": 0.0,
+        "baseline": 83.0,
+        "dev_pct": -83.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "over": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 72.0,
+        "dev_pct": 28.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "over15": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 90.0,
+        "dev_pct": 10.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "btts": {
+        "n": 1,
+        "w": 0,
+        "l": 1,
+        "profit": -0.3,
+        "win_pct": 0.0,
+        "baseline": 65.0,
+        "dev_pct": -65.0,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "serbian league": {
+      "home_dw": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 88.0,
+        "dev_pct": 12.0,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "scottish league two": {
+      "home_sc": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 85.0,
+        "dev_pct": 15.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "away_sc": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.2,
+        "win_pct": 100.0,
+        "baseline": 83.0,
+        "dev_pct": 17.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "over": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 72.0,
+        "dev_pct": 28.0,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "french ligue 1": {
+      "home_sc": {
+        "n": 3,
+        "w": 3,
+        "l": 0,
+        "profit": 0.9,
+        "win_pct": 100.0,
+        "baseline": 85.0,
+        "dev_pct": 15.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "over": {
+        "n": 2,
+        "w": 2,
+        "l": 0,
+        "profit": 0.6,
+        "win_pct": 100.0,
+        "baseline": 72.0,
+        "dev_pct": 28.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "over15": {
+        "n": 2,
+        "w": 2,
+        "l": 0,
+        "profit": 0.6,
+        "win_pct": 100.0,
+        "baseline": 90.0,
+        "dev_pct": 10.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home_dw": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 88.0,
+        "dev_pct": 12.0,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "german bundesliga 2": {
+      "home_sc": {
+        "n": 3,
+        "w": 3,
+        "l": 0,
+        "profit": 0.9,
+        "win_pct": 100.0,
+        "baseline": 85.0,
+        "dev_pct": 15.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "away_sc": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 83.0,
+        "dev_pct": 17.0,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "turkish super lig": {
+      "home_sc": {
+        "n": 1,
+        "w": 0,
+        "l": 1,
+        "profit": -0.3,
+        "win_pct": 0.0,
+        "baseline": 85.0,
+        "dev_pct": -85.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home_dw": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 88.0,
+        "dev_pct": 12.0,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "russian premier": {
+      "away_sc": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 83.0,
+        "dev_pct": 17.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "over15": {
+        "n": 1,
+        "w": 0,
+        "l": 1,
+        "profit": -0.3,
+        "win_pct": 0.0,
+        "baseline": 90.0,
+        "dev_pct": -90.0,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "japanese j1 league": {
+      "away_sc": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 83.0,
+        "dev_pct": 17.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home_dw": {
+        "n": 1,
+        "w": 0,
+        "l": 1,
+        "profit": -0.3,
+        "win_pct": 0.0,
+        "baseline": 88.0,
+        "dev_pct": -88.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home_sc": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 85.0,
+        "dev_pct": 15.0,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "scottish league one": {
+      "away_sc": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 83.0,
+        "dev_pct": 17.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "over": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 72.0,
+        "dev_pct": 28.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "over15": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 90.0,
+        "dev_pct": 10.0,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "austrian bundesliga": {
+      "away_sc": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 83.0,
+        "dev_pct": 17.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "over15": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 90.0,
+        "dev_pct": 10.0,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "swedish superettan": {
+      "away_sc": {
+        "n": 2,
+        "w": 0,
+        "l": 2,
+        "profit": -0.4,
+        "win_pct": 0.0,
+        "baseline": 83.0,
+        "dev_pct": -83.0,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "israeli league": {
+      "home_dw": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 88.0,
+        "dev_pct": 12.0,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "scottish lowland league": {
+      "home_dw": {
+        "n": 1,
+        "w": 0,
+        "l": 1,
+        "profit": -0.3,
+        "win_pct": 0.0,
+        "baseline": 88.0,
+        "dev_pct": -88.0,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "portuguese liga": {
+      "over": {
+        "n": 1,
+        "w": 0,
+        "l": 1,
+        "profit": -0.3,
+        "win_pct": 0.0,
+        "baseline": 72.0,
+        "dev_pct": -72.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "over15": {
+        "n": 1,
+        "w": 0,
+        "l": 1,
+        "profit": -0.3,
+        "win_pct": 0.0,
+        "baseline": 90.0,
+        "dev_pct": -90.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home_dw": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 88.0,
+        "dev_pct": 12.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home_sc": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 85.0,
+        "dev_pct": 15.0,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "venezuela primera clausura": {
+      "over": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 72.0,
+        "dev_pct": 28.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "over15": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 90.0,
+        "dev_pct": 10.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home_sc": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 85.0,
+        "dev_pct": 15.0,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "football league championship": {
+      "over": {
+        "n": 1,
+        "w": 0,
+        "l": 1,
+        "profit": -0.3,
+        "win_pct": 0.0,
+        "baseline": 72.0,
+        "dev_pct": -72.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "over15": {
+        "n": 1,
+        "w": 0,
+        "l": 1,
+        "profit": -0.3,
+        "win_pct": 0.0,
+        "baseline": 90.0,
+        "dev_pct": -90.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home_sc": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 85.0,
+        "dev_pct": 15.0,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "mexican primera apertura": {
+      "home_dw": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 88.0,
+        "dev_pct": 12.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home_sc": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 85.0,
+        "dev_pct": 15.0,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "chile primera": {
+      "home_dw": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 88.0,
+        "dev_pct": 12.0,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "polish ekstraklasa": {
+      "home_dw": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 88.0,
+        "dev_pct": 12.0,
+        "caution_reasons": [],
+        "caution": false
+      },
+      "home_sc": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.3,
+        "win_pct": 100.0,
+        "baseline": 85.0,
+        "dev_pct": 15.0,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "ecuador liga pro": {
+      "home_sc": {
+        "n": 1,
+        "w": 0,
+        "l": 1,
+        "profit": -0.3,
+        "win_pct": 0.0,
+        "baseline": 85.0,
+        "dev_pct": -85.0,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "italian serie a": {
+      "away_sc": {
+        "n": 1,
+        "w": 0,
+        "l": 1,
+        "profit": -0.2,
+        "win_pct": 0.0,
+        "baseline": 83.0,
+        "dev_pct": -83.0,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "danish sas ligaen": {
+      "away_sc": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.2,
+        "win_pct": 100.0,
+        "baseline": 83.0,
+        "dev_pct": 17.0,
+        "caution_reasons": [],
+        "caution": false
+      }
+    },
+    "slovenian league": {
+      "away_sc": {
+        "n": 1,
+        "w": 1,
+        "l": 0,
+        "profit": 0.2,
+        "win_pct": 100.0,
+        "baseline": 83.0,
+        "dev_pct": 17.0,
+        "caution_reasons": [],
         "caution": false
       }
     }
