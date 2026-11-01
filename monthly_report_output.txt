@@ -1,0 +1,597 @@
+== PREDICTION STATS ==
+OVERALL      all            958 picks  759W-199L   79.2%  profit +164.50
+BY STATAREA SIGNAL:
+  AGREE_AWAY_SCORE  24 picks  16W-8L   66.7%  profit +2.20
+  AGREE_BTTS       7 picks  4W-3L   57.1%  profit +0.00
+  AGREE_HOME      20 picks  12W-8L   60.0%  profit +1.20
+  AGREE_HOME_DW   51 picks  43W-8L   84.3%  profit +10.50
+  AGREE_HOME_SCORE  41 picks  39W-2L   95.1%  profit +11.10
+  AGREE_OVER      51 picks  46W-5L   90.2%  profit +12.30
+  AGREE_OVER15    21 picks  17W-4L   81.0%  profit +3.90
+  AGREE_UNDER      3 picks  2W-1L   66.7%  profit +0.30
+  DIVERGE        105 picks  81W-24L   77.1%  profit +16.60
+  NOT_FOUND      391 picks  309W-82L   79.0%  profit +67.00
+  none           244 picks  190W-54L   77.9%  profit +39.40
+BY MARKET:
+  away_sc        238 picks  180W-58L   75.6%  profit +34.10
+  btts            22 picks  10W-12L   45.5%  profit -0.60
+  home            51 picks  35W-16L   68.6%  profit +5.70
+  home_dw        155 picks  129W-26L   83.2%  profit +30.90
+  home_sc        205 picks  185W-20L   90.2%  profit +49.50
+  over           135 picks  95W-40L   70.4%  profit +15.50
+  over15         147 picks  122W-25L   83.0%  profit +29.10
+  under35          5 picks  3W-2L   60.0%  profit +0.30
+BY TIER:
+  ✅ Solid        272 picks  211W-61L   77.6%  profit +43.70
+  🔥 Premium      686 picks  548W-138L   79.9%  profit +120.80
+BY LEAGUE (worst first):
+  Copa Libertadores   1 picks  0W-1L    0.0%  profit -0.30
+  Bulgarian League   1 picks  0W-1L    0.0%  profit -0.30
+  League of Ireland   1 picks  0W-1L    0.0%  profit -0.20
+  Scottish Lowland League   9 picks  4W-5L   44.4%  profit -0.40
+  Football League Championship  12 picks  6W-6L   50.0%  profit -0.20
+  Ecuador Liga Pro   2 picks  1W-1L   50.0%  profit -0.10
+  Croatian HNL     2 picks  1W-1L   50.0%  profit +0.00
+  Nations League  16 picks  9W-7L   56.2%  profit +0.30
+  Colombia Prim A Finalizacion  12 picks  7W-5L   58.3%  profit +0.50
+  Korean K-League 2   5 picks  3W-2L   60.0%  profit +0.20
+  Portuguese Liga   5 picks  3W-2L   60.0%  profit +0.30
+  Greek Super League   5 picks  3W-2L   60.0%  profit +0.30
+  Swedish Allsvenskan   5 picks  3W-2L   60.0%  profit +0.30
+  Spanish Segunda  10 picks  6W-4L   60.0%  profit +0.60
+  Football Conference North  10 picks  6W-4L   60.0%  profit +0.60
+  League of Ireland Div 1  13 picks  8W-5L   61.5%  profit +1.00
+  Turkish Super Lig  13 picks  8W-5L   61.5%  profit +1.00
+  Premier League  16 picks  10W-6L   62.5%  profit +1.10
+  Europa Conference League  21 picks  14W-7L   66.7%  profit +2.30
+  Football League Two  10 picks  7W-3L   70.0%  profit +1.20
+  German Bundesliga  24 picks  17W-7L   70.8%  profit +2.80
+  Russian Premier   7 picks  5W-2L   71.4%  profit +0.80
+  Europa League    7 picks  5W-2L   71.4%  profit +0.80
+  German Bundesliga 2  14 picks  10W-4L   71.4%  profit +1.70
+  Hungarian League  11 picks  8W-3L   72.7%  profit +1.50
+  Unibond Premier  48 picks  35W-13L   72.9%  profit +6.50
+  Peru Liga 1 Clausura  26 picks  19W-7L   73.1%  profit +3.50
+  Peru Liga 1 Acumulada  26 picks  19W-7L   73.1%  profit +3.50
+  Football League Trophy  15 picks  11W-4L   73.3%  profit +2.00
+  Czech Liga       4 picks  3W-1L   75.0%  profit +0.60
+  Belarus League   4 picks  3W-1L   75.0%  profit +0.60
+  Japanese J2 League   4 picks  3W-1L   75.0%  profit +0.60
+  German Cup       4 picks  3W-1L   75.0%  profit +0.60
+  Liga Prof Argentina Torneo   8 picks  6W-2L   75.0%  profit +1.00
+  Swiss Super League  22 picks  17W-5L   77.3%  profit +3.70
+  Swedish Superettan   9 picks  7W-2L   77.8%  profit +1.70
+  Belgium League  14 picks  11W-3L   78.6%  profit +2.30
+  Italian Serie A   5 picks  4W-1L   80.0%  profit +1.00
+  Scottish League One  10 picks  8W-2L   80.0%  profit +1.70
+  Spanish La Liga  21 picks  17W-4L   81.0%  profit +3.80
+  Ryman Premier   39 picks  32W-7L   82.1%  profit +7.30
+  Football Conference South  17 picks  14W-3L   82.4%  profit +3.20
+  Danish SAS Ligaen   6 picks  5W-1L   83.3%  profit +1.10
+  Venezuela Primera Clausura   6 picks  5W-1L   83.3%  profit +1.20
+  Chile Primera    6 picks  5W-1L   83.3%  profit +1.20
+  Norwegian Tippeligaen  24 picks  20W-4L   83.3%  profit +4.60
+  Scottish Highland League  38 picks  32W-6L   84.2%  profit +7.80
+  Japanese J1 League  13 picks  11W-2L   84.6%  profit +2.60
+  Israeli League  13 picks  11W-2L   84.6%  profit +2.70
+  Northern Irish Premier League   7 picks  6W-1L   85.7%  profit +1.50
+  Welsh Premier   14 picks  12W-2L   85.7%  profit +3.00
+  Southern League Premier  28 picks  24W-4L   85.7%  profit +5.80
+  Netherlands League  30 picks  26W-4L   86.7%  profit +6.40
+  Polish Ekstraklasa   9 picks  8W-1L   88.9%  profit +2.10
+  Football League One  18 picks  16W-2L   88.9%  profit +4.20
+  French Ligue 1  18 picks  16W-2L   88.9%  profit +4.20
+  Scottish League Challenge Cup  18 picks  16W-2L   88.9%  profit +4.20
+  Scottish League Two  10 picks  9W-1L   90.0%  profit +2.30
+  Argentina Primera Nacional  10 picks  9W-1L   90.0%  profit +2.40
+  Brazilian Serie A  10 picks  9W-1L   90.0%  profit +2.40
+  MLS             50 picks  45W-5L   90.0%  profit +11.80
+  FA Trophy       11 picks  10W-1L   90.9%  profit +2.70
+  Scottish FA Cup  18 picks  17W-1L   94.4%  profit +4.80
+  European Cup    19 picks  18W-1L   94.7%  profit +5.00
+  National League  20 picks  19W-1L   95.0%  profit +5.30
+  Slovenian League   1 picks  1W-0L  100.0%  profit +0.20
+  Scottish Championship   1 picks  1W-0L  100.0%  profit +0.30
+  Uruguay Primera Clausura   2 picks  2W-0L  100.0%  profit +0.60
+  Paraguay League Clausura   2 picks  2W-0L  100.0%  profit +0.60
+  Ukrainian League   2 picks  2W-0L  100.0%  profit +0.60
+  Scottish Premier   3 picks  3W-0L  100.0%  profit +0.80
+  Serbian League   3 picks  3W-0L  100.0%  profit +0.90
+  Korean K-League 1   4 picks  4W-0L  100.0%  profit +1.10
+  Romanian Liga 1  11 picks  11W-0L  100.0%  profit +3.20
+  Austrian Bundesliga  11 picks  11W-0L  100.0%  profit +3.30
+  Mexican Primera Apertura  14 picks  14W-0L  100.0%  profit +4.20
+pending: 79   settled: 958
+== LEAGUE HEALTH (last 30d, min 6 picks) ==
+saved -> /home/runner/work/overunder-v2/overunder-v2/data/league_health.json
+
+  bulgarian league   1 picks 0W-1L  -0.30u
+     away_sc     1 picks  0W-1L    0.0%  -0.30u
+
+  copa libertadores   1 picks 0W-1L  -0.30u
+     home_dw     1 picks  0W-1L    0.0%  -0.30u
+
+  league of ireland   1 picks 0W-1L  -0.20u
+     away_sc     1 picks  0W-1L    0.0%  -0.20u
+
+  scottish lowland league   9 picks 4W-5L  -0.40u
+     home_dw     1 picks  0W-1L    0.0%  -0.30u
+     over        3 picks  1W-2L   33.3%  -0.30u
+     over15      3 picks  1W-2L   33.3%  -0.30u
+     away_sc     1 picks  1W-0L  100.0%  +0.20u
+     home_sc     1 picks  1W-0L  100.0%  +0.30u
+
+  football league championship   12 picks 6W-6L  -0.20u
+     over        2 picks  0W-2L    0.0%  -0.60u
+     over15      2 picks  0W-2L    0.0%  -0.60u
+     home_sc     3 picks  1W-2L   33.3%  -0.30u
+     away_sc     5 picks  5W-0L  100.0%  +1.30u
+
+  ecuador liga pro   2 picks 1W-1L  -0.10u
+     home_sc     1 picks  0W-1L    0.0%  -0.30u
+     away_sc     1 picks  1W-0L  100.0%  +0.20u
+
+  croatian hnl   2 picks 1W-1L  +0.00u
+     home_dw     2 picks  1W-1L   50.0%  +0.00u
+
+  nations league   16 picks 9W-7L  +0.30u
+     over15      1 picks  0W-1L    0.0%  -0.30u
+     away_sc     3 picks  1W-2L   33.3%  -0.30u
+     over        4 picks  2W-2L   50.0%  -0.30u
+     home_sc     4 picks  2W-2L   50.0%  +0.00u
+     home        2 picks  2W-0L  100.0%  +0.60u
+     home_dw     2 picks  2W-0L  100.0%  +0.60u
+
+  colombia prim a finalizacion   12 picks 7W-5L  +0.50u
+     home        1 picks  0W-1L    0.0%  -0.30u
+     home_dw     6 picks  3W-3L   50.0%  +0.00u  ⚠ CAUTION
+     away_sc     4 picks  3W-1L   75.0%  +0.50u
+     home_sc     1 picks  1W-0L  100.0%  +0.30u
+
+  korean k-league 2   5 picks 3W-2L  +0.20u
+     home_sc     1 picks  0W-1L    0.0%  -0.30u
+     home_dw     2 picks  1W-1L   50.0%  +0.00u
+     away_sc     2 picks  2W-0L  100.0%  +0.50u
+
+  greek super league   5 picks 3W-2L  +0.30u
+     home_dw     3 picks  1W-2L   33.3%  -0.30u
+     home        1 picks  1W-0L  100.0%  +0.30u
+     home_sc     1 picks  1W-0L  100.0%  +0.30u
+
+  portuguese liga   5 picks 3W-2L  +0.30u
+     over        1 picks  0W-1L    0.0%  -0.30u
+     over15      1 picks  0W-1L    0.0%  -0.30u
+     home_dw     1 picks  1W-0L  100.0%  +0.30u
+     home_sc     1 picks  1W-0L  100.0%  +0.30u
+     away_sc     1 picks  1W-0L  100.0%  +0.30u
+
+  swedish allsvenskan   5 picks 3W-2L  +0.30u
+     home        1 picks  0W-1L    0.0%  -0.30u
+     home_dw     2 picks  1W-1L   50.0%  +0.00u
+     away_sc     1 picks  1W-0L  100.0%  +0.30u
+     home_sc     1 picks  1W-0L  100.0%  +0.30u
+
+  football conference north   10 picks 6W-4L  +0.60u
+     home_dw     4 picks  2W-2L   50.0%  +0.00u
+     home_sc     4 picks  2W-2L   50.0%  +0.00u
+     over        1 picks  1W-0L  100.0%  +0.30u
+     away_sc     1 picks  1W-0L  100.0%  +0.30u
+
+  spanish segunda   10 picks 6W-4L  +0.60u
+     under35     1 picks  0W-1L    0.0%  -0.30u
+     away_sc     2 picks  1W-1L   50.0%  +0.00u
+     over        2 picks  1W-1L   50.0%  +0.00u
+     home_dw     2 picks  1W-1L   50.0%  +0.00u
+     over15      1 picks  1W-0L  100.0%  +0.30u
+     home_sc     2 picks  2W-0L  100.0%  +0.60u
+
+  league of ireland div 1   13 picks 8W-5L  +1.00u
+     over        2 picks  0W-2L    0.0%  -0.60u
+     away_sc     3 picks  1W-2L   33.3%  -0.20u
+     btts        2 picks  1W-1L   50.0%  +0.00u
+     over15      2 picks  2W-0L  100.0%  +0.60u
+     home_sc     4 picks  4W-0L  100.0%  +1.20u
+
+  turkish super lig   13 picks 8W-5L  +1.00u
+     over        2 picks  0W-2L    0.0%  -0.60u
+     btts        1 picks  0W-1L    0.0%  -0.20u
+     home_sc     2 picks  1W-1L   50.0%  +0.00u
+     away_sc     2 picks  1W-1L   50.0%  +0.00u
+     over15      1 picks  1W-0L  100.0%  +0.30u
+     home        2 picks  2W-0L  100.0%  +0.60u
+     home_dw     3 picks  3W-0L  100.0%  +0.90u
+
+  premier league   16 picks 10W-6L  +1.10u
+     home        1 picks  0W-1L    0.0%  -0.30u
+     over        2 picks  1W-1L   50.0%  +0.00u
+     home_sc     2 picks  1W-1L   50.0%  +0.00u
+     home_dw     3 picks  2W-1L   66.7%  +0.30u
+     over15      3 picks  2W-1L   66.7%  +0.30u
+     away_sc     5 picks  4W-1L   80.0%  +0.80u
+
+  europa conference league   21 picks 14W-7L  +2.30u
+     over        1 picks  0W-1L    0.0%  -0.30u
+     home        2 picks  1W-1L   50.0%  +0.00u
+     away_sc     7 picks  4W-3L   57.1%  +0.50u  ⚠ CAUTION
+     over15      3 picks  2W-1L   66.7%  +0.30u
+     home_sc     5 picks  4W-1L   80.0%  +0.90u
+     home_dw     3 picks  3W-0L  100.0%  +0.90u
+
+  football league two   10 picks 7W-3L  +1.20u
+     home        2 picks  0W-2L    0.0%  -0.60u
+     home_dw     5 picks  4W-1L   80.0%  +0.90u
+     away_sc     1 picks  1W-0L  100.0%  +0.30u
+     over15      1 picks  1W-0L  100.0%  +0.30u
+     home_sc     1 picks  1W-0L  100.0%  +0.30u
+
+  german bundesliga   24 picks 17W-7L  +2.80u
+     away_sc     6 picks  3W-3L   50.0%  -0.10u  ⚠ CAUTION
+     over        7 picks  4W-3L   57.1%  +0.30u
+     over15      6 picks  5W-1L   83.3%  +1.20u
+     btts        1 picks  1W-0L  100.0%  +0.20u
+     home_sc     4 picks  4W-0L  100.0%  +1.20u
+
+  europa league   7 picks 5W-2L  +0.80u
+     home        1 picks  0W-1L    0.0%  -0.30u
+     home_dw     2 picks  1W-1L   50.0%  +0.00u
+     away_sc     1 picks  1W-0L  100.0%  +0.20u
+     home_sc     1 picks  1W-0L  100.0%  +0.30u
+     over        1 picks  1W-0L  100.0%  +0.30u
+     over15      1 picks  1W-0L  100.0%  +0.30u
+
+  russian premier   7 picks 5W-2L  +0.80u
+     over        1 picks  0W-1L    0.0%  -0.30u
+     over15      2 picks  1W-1L   50.0%  +0.00u
+     home_sc     1 picks  1W-0L  100.0%  +0.30u
+     away_sc     3 picks  3W-0L  100.0%  +0.80u
+
+  german bundesliga 2   14 picks 10W-4L  +1.70u
+     away_sc     6 picks  3W-3L   50.0%  -0.10u  ⚠ CAUTION
+     over15      2 picks  1W-1L   50.0%  +0.00u
+     over        1 picks  1W-0L  100.0%  +0.30u
+     home_dw     1 picks  1W-0L  100.0%  +0.30u
+     home_sc     4 picks  4W-0L  100.0%  +1.20u
+
+  hungarian league   11 picks 8W-3L  +1.50u
+     btts        1 picks  0W-1L    0.0%  -0.30u
+     away_sc     2 picks  1W-1L   50.0%  +0.00u
+     home_sc     5 picks  4W-1L   80.0%  +0.90u
+     home_dw     1 picks  1W-0L  100.0%  +0.30u
+     over        1 picks  1W-0L  100.0%  +0.30u
+     over15      1 picks  1W-0L  100.0%  +0.30u
+
+  unibond premier   48 picks 35W-13L  +6.50u
+     btts        3 picks  1W-2L   33.3%  -0.20u
+     away_sc    13 picks  8W-5L   61.5%  +1.00u  ⚠ CAUTION
+     over       12 picks  9W-3L   75.0%  +1.50u
+     over15     12 picks  9W-3L   75.0%  +1.80u
+     home_dw     1 picks  1W-0L  100.0%  +0.30u
+     home        1 picks  1W-0L  100.0%  +0.30u
+     home_sc     6 picks  6W-0L  100.0%  +1.80u
+
+  peru liga 1 acumulada   26 picks 19W-7L  +3.50u
+     over        3 picks  1W-2L   33.3%  -0.30u
+     home        3 picks  2W-1L   66.7%  +0.30u
+     over15      3 picks  2W-1L   66.7%  +0.30u
+     away_sc     4 picks  3W-1L   75.0%  +0.50u
+     home_dw     6 picks  5W-1L   83.3%  +1.20u
+     home_sc     7 picks  6W-1L   85.7%  +1.50u
+
+  peru liga 1 clausura   26 picks 19W-7L  +3.50u
+     over        3 picks  1W-2L   33.3%  -0.30u
+     home        3 picks  2W-1L   66.7%  +0.30u
+     over15      3 picks  2W-1L   66.7%  +0.30u
+     away_sc     4 picks  3W-1L   75.0%  +0.50u
+     home_dw     6 picks  5W-1L   83.3%  +1.20u
+     home_sc     7 picks  6W-1L   85.7%  +1.50u
+
+  football league trophy   15 picks 11W-4L  +2.00u
+     btts        1 picks  0W-1L    0.0%  -0.20u
+     home_sc     2 picks  1W-1L   50.0%  +0.00u
+     over        4 picks  3W-1L   75.0%  +0.50u
+     away_sc     6 picks  5W-1L   83.3%  +1.10u
+     over15      2 picks  2W-0L  100.0%  +0.60u
+
+  belarus league   4 picks 3W-1L  +0.60u
+     away_sc     2 picks  1W-1L   50.0%  +0.00u
+     home_dw     2 picks  2W-0L  100.0%  +0.60u
+
+  czech liga   4 picks 3W-1L  +0.60u
+     home_dw     2 picks  1W-1L   50.0%  +0.00u
+     away_sc     1 picks  1W-0L  100.0%  +0.30u
+     over        1 picks  1W-0L  100.0%  +0.30u
+
+  german cup   4 picks 3W-1L  +0.60u
+     away_sc     1 picks  0W-1L    0.0%  -0.30u
+     over15      1 picks  1W-0L  100.0%  +0.30u
+     home_dw     1 picks  1W-0L  100.0%  +0.30u
+     home_sc     1 picks  1W-0L  100.0%  +0.30u
+
+  japanese j2 league   4 picks 3W-1L  +0.60u
+     home        1 picks  0W-1L    0.0%  -0.30u
+     home_dw     3 picks  3W-0L  100.0%  +0.90u
+
+  liga prof argentina torneo   8 picks 6W-2L  +1.00u
+     home_dw     2 picks  1W-1L   50.0%  +0.00u
+     away_sc     4 picks  3W-1L   75.0%  +0.40u
+     home_sc     2 picks  2W-0L  100.0%  +0.60u
+
+  swiss super league   22 picks 17W-5L  +3.70u
+     btts        2 picks  0W-2L    0.0%  -0.50u
+     away_sc     4 picks  2W-2L   50.0%  +0.00u
+     over        4 picks  3W-1L   75.0%  +0.60u
+     home        1 picks  1W-0L  100.0%  +0.30u
+     home_dw     1 picks  1W-0L  100.0%  +0.30u
+     home_sc     5 picks  5W-0L  100.0%  +1.50u
+     over15      5 picks  5W-0L  100.0%  +1.50u
+
+  swedish superettan   9 picks 7W-2L  +1.70u
+     away_sc     3 picks  1W-2L   33.3%  -0.10u
+     home        2 picks  2W-0L  100.0%  +0.60u
+     home_dw     4 picks  4W-0L  100.0%  +1.20u
+
+  belgium league   14 picks 11W-3L  +2.30u
+     home        2 picks  1W-1L   50.0%  +0.00u
+     away_sc     3 picks  2W-1L   66.7%  +0.20u
+     home_dw     4 picks  3W-1L   75.0%  +0.60u
+     over        1 picks  1W-0L  100.0%  +0.30u
+     over15      1 picks  1W-0L  100.0%  +0.30u
+     home_sc     3 picks  3W-0L  100.0%  +0.90u
+
+  italian serie a   5 picks 4W-1L  +1.00u
+     away_sc     1 picks  0W-1L    0.0%  -0.20u
+     home_dw     2 picks  2W-0L  100.0%  +0.60u
+     home_sc     2 picks  2W-0L  100.0%  +0.60u
+
+  scottish league one   10 picks 8W-2L  +1.70u
+     btts        1 picks  0W-1L    0.0%  -0.30u
+     away_sc     4 picks  3W-1L   75.0%  +0.50u
+     home_sc     1 picks  1W-0L  100.0%  +0.30u
+     over        2 picks  2W-0L  100.0%  +0.60u
+     over15      2 picks  2W-0L  100.0%  +0.60u
+
+  spanish la liga   21 picks 17W-4L  +3.80u
+     over15      4 picks  2W-2L   50.0%  +0.00u
+     over        2 picks  1W-1L   50.0%  +0.00u
+     away_sc     3 picks  2W-1L   66.7%  +0.30u
+     btts        1 picks  1W-0L  100.0%  +0.20u
+     home        1 picks  1W-0L  100.0%  +0.30u
+     home_dw     4 picks  4W-0L  100.0%  +1.20u
+     home_sc     6 picks  6W-0L  100.0%  +1.80u
+
+  ryman premier   39 picks 32W-7L  +7.30u
+     home        2 picks  1W-1L   50.0%  +0.00u
+     away_sc     9 picks  6W-3L   66.7%  +1.00u
+     over15     11 picks  9W-2L   81.8%  +2.10u
+     over        6 picks  5W-1L   83.3%  +1.00u
+     btts        1 picks  1W-0L  100.0%  +0.20u
+     home_dw     3 picks  3W-0L  100.0%  +0.90u
+     home_sc     7 picks  7W-0L  100.0%  +2.10u
+
+  football conference south   17 picks 14W-3L  +3.20u
+     btts        1 picks  0W-1L    0.0%  -0.30u
+     home        1 picks  0W-1L    0.0%  -0.30u
+     away_sc     6 picks  5W-1L   83.3%  +1.20u
+     over15      1 picks  1W-0L  100.0%  +0.30u
+     over        2 picks  2W-0L  100.0%  +0.50u
+     home_sc     3 picks  3W-0L  100.0%  +0.90u
+     home_dw     3 picks  3W-0L  100.0%  +0.90u
+
+  danish sas ligaen   6 picks 5W-1L  +1.10u
+     away_sc     2 picks  1W-1L   50.0%  -0.10u
+     over15      1 picks  1W-0L  100.0%  +0.30u
+     home_dw     1 picks  1W-0L  100.0%  +0.30u
+     home_sc     2 picks  2W-0L  100.0%  +0.60u
+
+  chile primera   6 picks 5W-1L  +1.20u
+     over        1 picks  0W-1L    0.0%  -0.30u
+     home_sc     1 picks  1W-0L  100.0%  +0.30u
+     over15      1 picks  1W-0L  100.0%  +0.30u
+     home        1 picks  1W-0L  100.0%  +0.30u
+     home_dw     2 picks  2W-0L  100.0%  +0.60u
+
+  venezuela primera clausura   6 picks 5W-1L  +1.20u
+     home_sc     2 picks  1W-1L   50.0%  +0.00u
+     over        1 picks  1W-0L  100.0%  +0.30u
+     over15      1 picks  1W-0L  100.0%  +0.30u
+     away_sc     1 picks  1W-0L  100.0%  +0.30u
+     home_dw     1 picks  1W-0L  100.0%  +0.30u
+
+  norwegian tippeligaen   24 picks 20W-4L  +4.60u
+     btts        2 picks  1W-1L   50.0%  +0.00u
+     over        2 picks  1W-1L   50.0%  +0.00u
+     over15      4 picks  3W-1L   75.0%  +0.60u
+     home_sc     6 picks  5W-1L   83.3%  +1.20u
+     home        1 picks  1W-0L  100.0%  +0.30u
+     home_dw     2 picks  2W-0L  100.0%  +0.60u
+     away_sc     7 picks  7W-0L  100.0%  +1.90u
+
+  scottish highland league   38 picks 32W-6L  +7.80u
+     btts        1 picks  0W-1L    0.0%  -0.20u
+     over15      8 picks  6W-2L   75.0%  +1.20u
+     over       11 picks  9W-2L   81.8%  +2.10u
+     away_sc     7 picks  6W-1L   85.7%  +1.40u
+     home        2 picks  2W-0L  100.0%  +0.60u
+     home_dw     3 picks  3W-0L  100.0%  +0.90u
+     home_sc     6 picks  6W-0L  100.0%  +1.80u
+
+  japanese j1 league   13 picks 11W-2L  +2.60u
+     home_dw     3 picks  2W-1L   66.7%  +0.30u
+     away_sc     5 picks  4W-1L   80.0%  +0.80u
+     over        1 picks  1W-0L  100.0%  +0.30u
+     over15      1 picks  1W-0L  100.0%  +0.30u
+     home        1 picks  1W-0L  100.0%  +0.30u
+     home_sc     2 picks  2W-0L  100.0%  +0.60u
+
+  israeli league   13 picks 11W-2L  +2.70u
+     home        2 picks  1W-1L   50.0%  +0.00u
+     home_dw     3 picks  2W-1L   66.7%  +0.30u
+     over        2 picks  2W-0L  100.0%  +0.60u
+     over15      3 picks  3W-0L  100.0%  +0.90u
+     away_sc     3 picks  3W-0L  100.0%  +0.90u
+
+  northern irish premier league   7 picks 6W-1L  +1.50u
+     away_sc     7 picks  6W-1L   85.7%  +1.50u
+
+  welsh premier   14 picks 12W-2L  +3.00u
+     home        3 picks  2W-1L   66.7%  +0.30u
+     home_dw     3 picks  2W-1L   66.7%  +0.30u
+     over        1 picks  1W-0L  100.0%  +0.30u
+     over15      1 picks  1W-0L  100.0%  +0.30u
+     away_sc     2 picks  2W-0L  100.0%  +0.60u
+     home_sc     4 picks  4W-0L  100.0%  +1.20u
+
+  southern league premier   28 picks 24W-4L  +5.80u
+     over        3 picks  2W-1L   66.7%  +0.30u
+     away_sc     9 picks  7W-2L   77.8%  +1.30u
+     over15      5 picks  4W-1L   80.0%  +0.90u
+     home        1 picks  1W-0L  100.0%  +0.30u
+     home_dw     3 picks  3W-0L  100.0%  +0.90u
+     home_sc     7 picks  7W-0L  100.0%  +2.10u
+
+  netherlands league   30 picks 26W-4L  +6.40u
+     home_dw     1 picks  0W-1L    0.0%  -0.30u
+     over        6 picks  4W-2L   66.7%  +0.60u
+     away_sc    11 picks  10W-1L   90.9%  +2.60u
+     btts        1 picks  1W-0L  100.0%  +0.20u
+     home_sc     4 picks  4W-0L  100.0%  +1.20u
+     over15      7 picks  7W-0L  100.0%  +2.10u
+
+  polish ekstraklasa   9 picks 8W-1L  +2.10u
+     away_sc     2 picks  1W-1L   50.0%  +0.00u
+     home        1 picks  1W-0L  100.0%  +0.30u
+     home_dw     2 picks  2W-0L  100.0%  +0.60u
+     home_sc     4 picks  4W-0L  100.0%  +1.20u
+
+  football league one   18 picks 16W-2L  +4.20u
+     away_sc     4 picks  3W-1L   75.0%  +0.60u
+     over        4 picks  3W-1L   75.0%  +0.60u
+     btts        1 picks  1W-0L  100.0%  +0.30u
+     home_dw     2 picks  2W-0L  100.0%  +0.60u
+     home_sc     3 picks  3W-0L  100.0%  +0.90u
+     over15      4 picks  4W-0L  100.0%  +1.20u
+
+  french ligue 1   18 picks 16W-2L  +4.20u
+     away_sc     2 picks  1W-1L   50.0%  +0.00u
+     home_sc     5 picks  4W-1L   80.0%  +0.90u
+     home        1 picks  1W-0L  100.0%  +0.30u
+     home_dw     2 picks  2W-0L  100.0%  +0.60u
+     over        4 picks  4W-0L  100.0%  +1.20u
+     over15      4 picks  4W-0L  100.0%  +1.20u
+
+  scottish league challenge cup   18 picks 16W-2L  +4.20u
+     over        3 picks  2W-1L   66.7%  +0.30u
+     over15      5 picks  4W-1L   80.0%  +0.90u
+     home        1 picks  1W-0L  100.0%  +0.30u
+     home_dw     2 picks  2W-0L  100.0%  +0.60u
+     away_sc     2 picks  2W-0L  100.0%  +0.60u
+     home_sc     5 picks  5W-0L  100.0%  +1.50u
+
+  scottish league two   10 picks 9W-1L  +2.30u
+     over        3 picks  2W-1L   66.7%  +0.30u
+     away_sc     2 picks  2W-0L  100.0%  +0.50u
+     over15      2 picks  2W-0L  100.0%  +0.60u
+     home_sc     3 picks  3W-0L  100.0%  +0.90u
+
+  argentina primera nacional   10 picks 9W-1L  +2.40u
+     under35     3 picks  2W-1L   66.7%  +0.30u
+     home_dw     7 picks  7W-0L  100.0%  +2.10u
+
+  brazilian serie a   10 picks 9W-1L  +2.40u
+     home_sc     4 picks  3W-1L   75.0%  +0.60u
+     away_sc     2 picks  2W-0L  100.0%  +0.60u
+     home_dw     4 picks  4W-0L  100.0%  +1.20u
+
+  mls   50 picks 45W-5L  +11.80u
+     away_sc    12 picks  9W-3L   75.0%  +1.60u
+     home_sc    10 picks  9W-1L   90.0%  +2.40u
+     over       10 picks  9W-1L   90.0%  +2.40u
+     home        1 picks  1W-0L  100.0%  +0.30u
+     home_dw     5 picks  5W-0L  100.0%  +1.50u
+     over15     12 picks  12W-0L  100.0%  +3.60u
+
+  fa trophy   11 picks 10W-1L  +2.70u
+     home_dw     1 picks  0W-1L    0.0%  -0.30u
+     over        1 picks  1W-0L  100.0%  +0.30u
+     over15      1 picks  1W-0L  100.0%  +0.30u
+     away_sc     8 picks  8W-0L  100.0%  +2.40u
+
+  scottish fa cup   18 picks 17W-1L  +4.80u
+     home        3 picks  2W-1L   66.7%  +0.30u
+     btts        1 picks  1W-0L  100.0%  +0.30u
+     home_dw     2 picks  2W-0L  100.0%  +0.60u
+     away_sc     2 picks  2W-0L  100.0%  +0.60u
+     over15      3 picks  3W-0L  100.0%  +0.90u
+     home_sc     3 picks  3W-0L  100.0%  +0.90u
+     over        4 picks  4W-0L  100.0%  +1.20u
+
+  european cup   19 picks 18W-1L  +5.00u
+     away_sc     5 picks  4W-1L   80.0%  +0.90u
+     btts        1 picks  1W-0L  100.0%  +0.20u
+     home_dw     1 picks  1W-0L  100.0%  +0.30u
+     over15      4 picks  4W-0L  100.0%  +1.20u
+     over        4 picks  4W-0L  100.0%  +1.20u
+     home_sc     4 picks  4W-0L  100.0%  +1.20u
+
+  national league   20 picks 19W-1L  +5.30u
+     away_sc     6 picks  5W-1L   83.3%  +1.10u
+     home        1 picks  1W-0L  100.0%  +0.30u
+     home_dw     1 picks  1W-0L  100.0%  +0.30u
+     over        1 picks  1W-0L  100.0%  +0.30u
+     over15      1 picks  1W-0L  100.0%  +0.30u
+     home_sc    10 picks  10W-0L  100.0%  +3.00u
+
+  slovenian league   1 picks 1W-0L  +0.20u
+     away_sc     1 picks  1W-0L  100.0%  +0.20u
+
+  scottish championship   1 picks 1W-0L  +0.30u
+     home_dw     1 picks  1W-0L  100.0%  +0.30u
+
+  paraguay league clausura   2 picks 2W-0L  +0.60u
+     home_sc     1 picks  1W-0L  100.0%  +0.30u
+     home_dw     1 picks  1W-0L  100.0%  +0.30u
+
+  ukrainian league   2 picks 2W-0L  +0.60u
+     home_sc     1 picks  1W-0L  100.0%  +0.30u
+     home_dw     1 picks  1W-0L  100.0%  +0.30u
+
+  uruguay primera clausura   2 picks 2W-0L  +0.60u
+     under35     1 picks  1W-0L  100.0%  +0.30u
+     home_sc     1 picks  1W-0L  100.0%  +0.30u
+
+  scottish premier   3 picks 3W-0L  +0.80u
+     away_sc     1 picks  1W-0L  100.0%  +0.20u
+     home_dw     1 picks  1W-0L  100.0%  +0.30u
+     home_sc     1 picks  1W-0L  100.0%  +0.30u
+
+  serbian league   3 picks 3W-0L  +0.90u
+     away_sc     1 picks  1W-0L  100.0%  +0.30u
+     home_dw     2 picks  2W-0L  100.0%  +0.60u
+
+  korean k-league 1   4 picks 4W-0L  +1.10u
+     away_sc     2 picks  2W-0L  100.0%  +0.50u
+     home_sc     2 picks  2W-0L  100.0%  +0.60u
+
+  romanian liga 1   11 picks 11W-0L  +3.20u
+     home        1 picks  1W-0L  100.0%  +0.30u
+     away_sc     2 picks  2W-0L  100.0%  +0.50u
+     home_sc     3 picks  3W-0L  100.0%  +0.90u
+     home_dw     5 picks  5W-0L  100.0%  +1.50u
+
+  austrian bundesliga   11 picks 11W-0L  +3.30u
+     away_sc     1 picks  1W-0L  100.0%  +0.30u
+     over15      1 picks  1W-0L  100.0%  +0.30u
+     home        1 picks  1W-0L  100.0%  +0.30u
+     home_dw     4 picks  4W-0L  100.0%  +1.20u
+     home_sc     4 picks  4W-0L  100.0%  +1.20u
+
+  mexican primera apertura   14 picks 14W-0L  +4.20u
+     home_dw     1 picks  1W-0L  100.0%  +0.30u
+     away_sc     2 picks  2W-0L  100.0%  +0.60u
+     over        2 picks  2W-0L  100.0%  +0.60u
+     over15      3 picks  3W-0L  100.0%  +0.90u
+     home_sc     6 picks  6W-0L  100.0%  +1.80u
+usage: overunder [-h]
+                 {demo,predict,fixture-audit,compare,settle,stats,leagues,report,scrape-check,team-stats,checks-by-league,recent,pending,void,retag,backfill,verify,backtest,fetch-statarea}
+                 ...
+overunder: error: unrecognized arguments: -n 100

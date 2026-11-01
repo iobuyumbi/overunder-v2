@@ -1,0 +1,700 @@
+{
+  "overall": {
+    "all": {
+      "n": 958,
+      "w": 759,
+      "l": 199,
+      "profit": 164.5,
+      "win_pct": 79.2
+    }
+  },
+  "by_signal": {
+    "NOT_FOUND": {
+      "n": 391,
+      "w": 309,
+      "l": 82,
+      "profit": 67.0,
+      "win_pct": 79.0
+    },
+    "AGREE_UNDER": {
+      "n": 3,
+      "w": 2,
+      "l": 1,
+      "profit": 0.3,
+      "win_pct": 66.7
+    },
+    "AGREE_HOME": {
+      "n": 20,
+      "w": 12,
+      "l": 8,
+      "profit": 1.2,
+      "win_pct": 60.0
+    },
+    "AGREE_HOME_DW": {
+      "n": 51,
+      "w": 43,
+      "l": 8,
+      "profit": 10.5,
+      "win_pct": 84.3
+    },
+    "AGREE_HOME_SCORE": {
+      "n": 41,
+      "w": 39,
+      "l": 2,
+      "profit": 11.1,
+      "win_pct": 95.1
+    },
+    "AGREE_AWAY_SCORE": {
+      "n": 24,
+      "w": 16,
+      "l": 8,
+      "profit": 2.2,
+      "win_pct": 66.7
+    },
+    "DIVERGE": {
+      "n": 105,
+      "w": 81,
+      "l": 24,
+      "profit": 16.6,
+      "win_pct": 77.1
+    },
+    "none": {
+      "n": 244,
+      "w": 190,
+      "l": 54,
+      "profit": 39.4,
+      "win_pct": 77.9
+    },
+    "AGREE_OVER15": {
+      "n": 21,
+      "w": 17,
+      "l": 4,
+      "profit": 3.9,
+      "win_pct": 81.0
+    },
+    "AGREE_OVER": {
+      "n": 51,
+      "w": 46,
+      "l": 5,
+      "profit": 12.3,
+      "win_pct": 90.2
+    },
+    "AGREE_BTTS": {
+      "n": 7,
+      "w": 4,
+      "l": 3,
+      "profit": 0.0,
+      "win_pct": 57.1
+    }
+  },
+  "by_tier": {
+    "\ud83d\udd25 Premium": {
+      "n": 686,
+      "w": 548,
+      "l": 138,
+      "profit": 120.8,
+      "win_pct": 79.9
+    },
+    "\u2705 Solid": {
+      "n": 272,
+      "w": 211,
+      "l": 61,
+      "profit": 43.7,
+      "win_pct": 77.6
+    }
+  },
+  "by_market": {
+    "under35": {
+      "n": 5,
+      "w": 3,
+      "l": 2,
+      "profit": 0.3,
+      "win_pct": 60.0
+    },
+    "home": {
+      "n": 51,
+      "w": 35,
+      "l": 16,
+      "profit": 5.7,
+      "win_pct": 68.6
+    },
+    "home_dw": {
+      "n": 155,
+      "w": 129,
+      "l": 26,
+      "profit": 30.9,
+      "win_pct": 83.2
+    },
+    "home_sc": {
+      "n": 205,
+      "w": 185,
+      "l": 20,
+      "profit": 49.5,
+      "win_pct": 90.2
+    },
+    "away_sc": {
+      "n": 238,
+      "w": 180,
+      "l": 58,
+      "profit": 34.1,
+      "win_pct": 75.6
+    },
+    "over": {
+      "n": 135,
+      "w": 95,
+      "l": 40,
+      "profit": 15.5,
+      "win_pct": 70.4
+    },
+    "over15": {
+      "n": 147,
+      "w": 122,
+      "l": 25,
+      "profit": 29.1,
+      "win_pct": 83.0
+    },
+    "btts": {
+      "n": 22,
+      "w": 10,
+      "l": 12,
+      "profit": -0.6,
+      "win_pct": 45.5
+    }
+  },
+  "by_league": {
+    "Argentina Primera Nacional": {
+      "n": 10,
+      "w": 9,
+      "l": 1,
+      "profit": 2.4,
+      "win_pct": 90.0
+    },
+    "Spanish Segunda": {
+      "n": 10,
+      "w": 6,
+      "l": 4,
+      "profit": 0.6,
+      "win_pct": 60.0
+    },
+    "Nations League": {
+      "n": 16,
+      "w": 9,
+      "l": 7,
+      "profit": 0.3,
+      "win_pct": 56.2
+    },
+    "Northern Irish Premier League": {
+      "n": 7,
+      "w": 6,
+      "l": 1,
+      "profit": 1.5,
+      "win_pct": 85.7
+    },
+    "Liga Prof Argentina Torneo": {
+      "n": 8,
+      "w": 6,
+      "l": 2,
+      "profit": 1.0,
+      "win_pct": 75.0
+    },
+    "Uruguay Primera Clausura": {
+      "n": 2,
+      "w": 2,
+      "l": 0,
+      "profit": 0.6,
+      "win_pct": 100.0
+    },
+    "Colombia Prim A Finalizacion": {
+      "n": 12,
+      "w": 7,
+      "l": 5,
+      "profit": 0.5,
+      "win_pct": 58.3
+    },
+    "Ryman Premier": {
+      "n": 39,
+      "w": 32,
+      "l": 7,
+      "profit": 7.3,
+      "win_pct": 82.1
+    },
+    "Football League Trophy": {
+      "n": 15,
+      "w": 11,
+      "l": 4,
+      "profit": 2.0,
+      "win_pct": 73.3
+    },
+    "Unibond Premier": {
+      "n": 48,
+      "w": 35,
+      "l": 13,
+      "profit": 6.5,
+      "win_pct": 72.9
+    },
+    "Football Conference South": {
+      "n": 17,
+      "w": 14,
+      "l": 3,
+      "profit": 3.2,
+      "win_pct": 82.4
+    },
+    "Paraguay League Clausura": {
+      "n": 2,
+      "w": 2,
+      "l": 0,
+      "profit": 0.6,
+      "win_pct": 100.0
+    },
+    "Scottish Highland League": {
+      "n": 38,
+      "w": 32,
+      "l": 6,
+      "profit": 7.8,
+      "win_pct": 84.2
+    },
+    "MLS": {
+      "n": 50,
+      "w": 45,
+      "l": 5,
+      "profit": 11.8,
+      "win_pct": 90.0
+    },
+    "Southern League Premier": {
+      "n": 28,
+      "w": 24,
+      "l": 4,
+      "profit": 5.8,
+      "win_pct": 85.7
+    },
+    "Peru Liga 1 Clausura": {
+      "n": 26,
+      "w": 19,
+      "l": 7,
+      "profit": 3.5,
+      "win_pct": 73.1
+    },
+    "Peru Liga 1 Acumulada": {
+      "n": 26,
+      "w": 19,
+      "l": 7,
+      "profit": 3.5,
+      "win_pct": 73.1
+    },
+    "Romanian Liga 1": {
+      "n": 11,
+      "w": 11,
+      "l": 0,
+      "profit": 3.2,
+      "win_pct": 100.0
+    },
+    "Brazilian Serie A": {
+      "n": 10,
+      "w": 9,
+      "l": 1,
+      "profit": 2.4,
+      "win_pct": 90.0
+    },
+    "League of Ireland Div 1": {
+      "n": 13,
+      "w": 8,
+      "l": 5,
+      "profit": 1.0,
+      "win_pct": 61.5
+    },
+    "Norwegian Tippeligaen": {
+      "n": 24,
+      "w": 20,
+      "l": 4,
+      "profit": 4.6,
+      "win_pct": 83.3
+    },
+    "Welsh Premier": {
+      "n": 14,
+      "w": 12,
+      "l": 2,
+      "profit": 3.0,
+      "win_pct": 85.7
+    },
+    "Belgium League": {
+      "n": 14,
+      "w": 11,
+      "l": 3,
+      "profit": 2.3,
+      "win_pct": 78.6
+    },
+    "German Bundesliga": {
+      "n": 24,
+      "w": 17,
+      "l": 7,
+      "profit": 2.8,
+      "win_pct": 70.8
+    },
+    "Netherlands League": {
+      "n": 30,
+      "w": 26,
+      "l": 4,
+      "profit": 6.4,
+      "win_pct": 86.7
+    },
+    "Czech Liga": {
+      "n": 4,
+      "w": 3,
+      "l": 1,
+      "profit": 0.6,
+      "win_pct": 75.0
+    },
+    "Belarus League": {
+      "n": 4,
+      "w": 3,
+      "l": 1,
+      "profit": 0.6,
+      "win_pct": 75.0
+    },
+    "National League": {
+      "n": 20,
+      "w": 19,
+      "l": 1,
+      "profit": 5.3,
+      "win_pct": 95.0
+    },
+    "Football League One": {
+      "n": 18,
+      "w": 16,
+      "l": 2,
+      "profit": 4.2,
+      "win_pct": 88.9
+    },
+    "Spanish La Liga": {
+      "n": 21,
+      "w": 17,
+      "l": 4,
+      "profit": 3.8,
+      "win_pct": 81.0
+    },
+    "Premier League": {
+      "n": 16,
+      "w": 10,
+      "l": 6,
+      "profit": 1.1,
+      "win_pct": 62.5
+    },
+    "Swiss Super League": {
+      "n": 22,
+      "w": 17,
+      "l": 5,
+      "profit": 3.7,
+      "win_pct": 77.3
+    },
+    "Japanese J2 League": {
+      "n": 4,
+      "w": 3,
+      "l": 1,
+      "profit": 0.6,
+      "win_pct": 75.0
+    },
+    "Football Conference North": {
+      "n": 10,
+      "w": 6,
+      "l": 4,
+      "profit": 0.6,
+      "win_pct": 60.0
+    },
+    "Football League Two": {
+      "n": 10,
+      "w": 7,
+      "l": 3,
+      "profit": 1.2,
+      "win_pct": 70.0
+    },
+    "Croatian HNL": {
+      "n": 2,
+      "w": 1,
+      "l": 1,
+      "profit": 0.0,
+      "win_pct": 50.0
+    },
+    "Hungarian League": {
+      "n": 11,
+      "w": 8,
+      "l": 3,
+      "profit": 1.5,
+      "win_pct": 72.7
+    },
+    "Serbian League": {
+      "n": 3,
+      "w": 3,
+      "l": 0,
+      "profit": 0.9,
+      "win_pct": 100.0
+    },
+    "Scottish League Two": {
+      "n": 10,
+      "w": 9,
+      "l": 1,
+      "profit": 2.3,
+      "win_pct": 90.0
+    },
+    "French Ligue 1": {
+      "n": 18,
+      "w": 16,
+      "l": 2,
+      "profit": 4.2,
+      "win_pct": 88.9
+    },
+    "German Bundesliga 2": {
+      "n": 14,
+      "w": 10,
+      "l": 4,
+      "profit": 1.7,
+      "win_pct": 71.4
+    },
+    "Turkish Super Lig": {
+      "n": 13,
+      "w": 8,
+      "l": 5,
+      "profit": 1.0,
+      "win_pct": 61.5
+    },
+    "Russian Premier": {
+      "n": 7,
+      "w": 5,
+      "l": 2,
+      "profit": 0.8,
+      "win_pct": 71.4
+    },
+    "Japanese J1 League": {
+      "n": 13,
+      "w": 11,
+      "l": 2,
+      "profit": 2.6,
+      "win_pct": 84.6
+    },
+    "Scottish League One": {
+      "n": 10,
+      "w": 8,
+      "l": 2,
+      "profit": 1.7,
+      "win_pct": 80.0
+    },
+    "Austrian Bundesliga": {
+      "n": 11,
+      "w": 11,
+      "l": 0,
+      "profit": 3.3,
+      "win_pct": 100.0
+    },
+    "Swedish Superettan": {
+      "n": 9,
+      "w": 7,
+      "l": 2,
+      "profit": 1.7,
+      "win_pct": 77.8
+    },
+    "Israeli League": {
+      "n": 13,
+      "w": 11,
+      "l": 2,
+      "profit": 2.7,
+      "win_pct": 84.6
+    },
+    "Scottish Lowland League": {
+      "n": 9,
+      "w": 4,
+      "l": 5,
+      "profit": -0.4,
+      "win_pct": 44.4
+    },
+    "Portuguese Liga": {
+      "n": 5,
+      "w": 3,
+      "l": 2,
+      "profit": 0.3,
+      "win_pct": 60.0
+    },
+    "Venezuela Primera Clausura": {
+      "n": 6,
+      "w": 5,
+      "l": 1,
+      "profit": 1.2,
+      "win_pct": 83.3
+    },
+    "Football League Championship": {
+      "n": 12,
+      "w": 6,
+      "l": 6,
+      "profit": -0.2,
+      "win_pct": 50.0
+    },
+    "Mexican Primera Apertura": {
+      "n": 14,
+      "w": 14,
+      "l": 0,
+      "profit": 4.2,
+      "win_pct": 100.0
+    },
+    "Chile Primera": {
+      "n": 6,
+      "w": 5,
+      "l": 1,
+      "profit": 1.2,
+      "win_pct": 83.3
+    },
+    "Polish Ekstraklasa": {
+      "n": 9,
+      "w": 8,
+      "l": 1,
+      "profit": 2.1,
+      "win_pct": 88.9
+    },
+    "Ecuador Liga Pro": {
+      "n": 2,
+      "w": 1,
+      "l": 1,
+      "profit": -0.1,
+      "win_pct": 50.0
+    },
+    "Italian Serie A": {
+      "n": 5,
+      "w": 4,
+      "l": 1,
+      "profit": 1.0,
+      "win_pct": 80.0
+    },
+    "Danish SAS Ligaen": {
+      "n": 6,
+      "w": 5,
+      "l": 1,
+      "profit": 1.1,
+      "win_pct": 83.3
+    },
+    "Slovenian League": {
+      "n": 1,
+      "w": 1,
+      "l": 0,
+      "profit": 0.2,
+      "win_pct": 100.0
+    },
+    "Greek Super League": {
+      "n": 5,
+      "w": 3,
+      "l": 2,
+      "profit": 0.3,
+      "win_pct": 60.0
+    },
+    "Scottish League Challenge Cup": {
+      "n": 18,
+      "w": 16,
+      "l": 2,
+      "profit": 4.2,
+      "win_pct": 88.9
+    },
+    "European Cup": {
+      "n": 19,
+      "w": 18,
+      "l": 1,
+      "profit": 5.0,
+      "win_pct": 94.7
+    },
+    "Europa Conference League": {
+      "n": 21,
+      "w": 14,
+      "l": 7,
+      "profit": 2.3,
+      "win_pct": 66.7
+    },
+    "Europa League": {
+      "n": 7,
+      "w": 5,
+      "l": 2,
+      "profit": 0.8,
+      "win_pct": 71.4
+    },
+    "League of Ireland": {
+      "n": 1,
+      "w": 0,
+      "l": 1,
+      "profit": -0.2,
+      "win_pct": 0.0
+    },
+    "Scottish Championship": {
+      "n": 1,
+      "w": 1,
+      "l": 0,
+      "profit": 0.3,
+      "win_pct": 100.0
+    },
+    "Korean K-League 2": {
+      "n": 5,
+      "w": 3,
+      "l": 2,
+      "profit": 0.2,
+      "win_pct": 60.0
+    },
+    "Ukrainian League": {
+      "n": 2,
+      "w": 2,
+      "l": 0,
+      "profit": 0.6,
+      "win_pct": 100.0
+    },
+    "Swedish Allsvenskan": {
+      "n": 5,
+      "w": 3,
+      "l": 2,
+      "profit": 0.3,
+      "win_pct": 60.0
+    },
+    "Scottish Premier": {
+      "n": 3,
+      "w": 3,
+      "l": 0,
+      "profit": 0.8,
+      "win_pct": 100.0
+    },
+    "Korean K-League 1": {
+      "n": 4,
+      "w": 4,
+      "l": 0,
+      "profit": 1.1,
+      "win_pct": 100.0
+    },
+    "Copa Libertadores": {
+      "n": 1,
+      "w": 0,
+      "l": 1,
+      "profit": -0.3,
+      "win_pct": 0.0
+    },
+    "FA Trophy": {
+      "n": 11,
+      "w": 10,
+      "l": 1,
+      "profit": 2.7,
+      "win_pct": 90.9
+    },
+    "Scottish FA Cup": {
+      "n": 18,
+      "w": 17,
+      "l": 1,
+      "profit": 4.8,
+      "win_pct": 94.4
+    },
+    "Bulgarian League": {
+      "n": 1,
+      "w": 0,
+      "l": 1,
+      "profit": -0.3,
+      "win_pct": 0.0
+    },
+    "German Cup": {
+      "n": 4,
+      "w": 3,
+      "l": 1,
+      "profit": 0.6,
+      "win_pct": 75.0
+    }
+  },
+  "pending": 79,
+  "settled_total": 958
+}
